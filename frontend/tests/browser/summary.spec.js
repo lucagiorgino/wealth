@@ -215,6 +215,12 @@ test("yearly expense tables show exact category and subcategory totals, collapse
     charts.getByRole("img", { name: /monthly income and expenses/ }),
   ).toBeVisible();
   await expect(charts.locator("svg.recharts-surface")).toHaveCount(2);
+  const chartBounds = await charts
+    .locator("[data-slot=chart]")
+    .evaluateAll((nodes) => nodes.map((node) => node.getBoundingClientRect()));
+  expect(chartBounds.every((bounds) => bounds.height <= 260)).toBe(true);
+  expect(Math.abs(chartBounds[0].y - chartBounds[1].y)).toBeLessThan(160);
+  expect(chartBounds[1].x).toBeGreaterThan(chartBounds[0].x);
   const monthly = charts.getByRole("img", {
     name: /monthly income and expenses/,
   });
@@ -327,12 +333,8 @@ test("yearly expense tables show exact category and subcategory totals, collapse
   await expect(
     charts.locator(".recharts-tooltip-wrapper").filter({ hasText: high }),
   ).toBeVisible();
-  await charts
-    .getByRole("button", { name: "Donut chart", exact: true })
-    .click();
-  await expect(
-    charts.getByRole("button", { name: "Donut chart", exact: true }),
-  ).toHaveAttribute("aria-pressed", "true");
+  await charts.getByLabel("Category chart view").selectOption("donut");
+  await expect(charts.getByLabel("Category chart view")).toHaveValue("donut");
   await expect(
     charts.getByRole("img", {
       name: /category ranking, relative expense scale/,
@@ -358,7 +360,7 @@ test("yearly expense tables show exact category and subcategory totals, collapse
     path: testInfo.outputPath("summary-donut-desktop.png"),
     fullPage: true,
   });
-  await charts.getByRole("button", { name: "Bar chart", exact: true }).click();
+  await charts.getByLabel("Category chart view").selectOption("bar");
   await rankingSurface.focus();
   await page.keyboard.press("ArrowLeft");
   await expect(
@@ -573,9 +575,7 @@ test("yearly expense tables show exact category and subcategory totals, collapse
     fullPage: true,
   });
   await page.evaluate(() => document.documentElement.classList.add("dark"));
-  await charts
-    .getByRole("button", { name: "Donut chart", exact: true })
-    .click();
+  await charts.getByLabel("Category chart view").selectOption("donut");
   await assertReadableCharts(page);
   const comparisonImage = page.getByRole("img", {
     name: "EUR selected-period category comparison, relative expense scale",
@@ -594,9 +594,7 @@ test("yearly expense tables show exact category and subcategory totals, collapse
   await expect(
     page.getByLabel("Monthly chart view", { exact: true }),
   ).toBeVisible();
-  await expect(
-    charts.getByRole("button", { name: "Donut chart", exact: true }),
-  ).toHaveAttribute("aria-pressed", "true");
+  await expect(charts.getByLabel("Category chart view")).toHaveValue("donut");
   const chartDataScroll = charts.getByRole("region", {
     name: "EUR category ranking data, scroll horizontally",
     exact: true,

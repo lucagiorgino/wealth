@@ -120,6 +120,7 @@ function ExactChartData({ points, currency, title, sum, average }) {
 function AnnualChart({ item }) {
   const { ranking: points, currency } = item;
   const [view, setView] = useState("bar");
+  const viewId = useId();
   const negative = points.some(
     (point) => point.value < 0 || point.amount.startsWith("-"),
   );
@@ -144,7 +145,7 @@ function AnnualChart({ item }) {
     />
   );
   return (
-    <Card className="min-w-0">
+    <Card size="sm" className="min-w-0">
       <CardHeader>
         <CardTitle>
           <h3>{title}</h3>
@@ -153,26 +154,18 @@ function AnnualChart({ item }) {
           Your 10 highest-spend categories. Sum and average cover these
           displayed categories, not every category or a monthly average.
         </CardDescription>
-        <div
-          role="group"
-          aria-label={`${currency} category ranking view`}
-          className="flex flex-wrap gap-2"
-        >
-          <Button
-            variant={donut ? "outline" : "secondary"}
-            aria-pressed={!donut}
-            onClick={() => setView("bar")}
+        <div className="mt-2 max-w-sm space-y-2">
+          <Label htmlFor={viewId}>Category chart view</Label>
+          <NativeSelect
+            id={viewId}
+            value={donut ? "donut" : "bar"}
+            onChange={(event) => setView(event.target.value)}
           >
-            Bar chart
-          </Button>
-          <Button
-            variant={donut ? "secondary" : "outline"}
-            aria-pressed={donut}
-            disabled={!donutAvailable}
-            onClick={() => setView("donut")}
-          >
-            Donut chart
-          </Button>
+            <NativeSelectOption value="bar">Bar chart</NativeSelectOption>
+            <NativeSelectOption value="donut" disabled={!donutAvailable}>
+              Donut chart
+            </NativeSelectOption>
+          </NativeSelect>
         </div>
         {!donutAvailable && (
           <p className="text-sm text-muted-foreground">
@@ -187,7 +180,7 @@ function AnnualChart({ item }) {
           role="img"
           aria-label={`${currency} ${title.toLowerCase()}, ${donut ? "donut share of displayed categories" : "relative expense scale"}`}
           className="aspect-auto w-full"
-          style={{ height: Math.max(300, points.length * 38) }}
+          style={{ height: Math.max(240, points.length * 26) }}
         >
           {donut ? (
             <PieChart accessibilityLayer>
@@ -308,7 +301,7 @@ function MonthlyChart({ item, net = false }) {
     net || rows.some((row) => row.expensesAmount.startsWith("-"));
   const series = net ? ["net"] : ["expenses", "income"];
   return (
-    <Card className="min-w-0">
+    <Card size="sm" className="min-w-0">
       <CardHeader>
         <CardTitle>
           <h3>{title}</h3>
@@ -325,7 +318,7 @@ function MonthlyChart({ item, net = false }) {
           config={monthlyConfig}
           role="img"
           aria-label={`${item.currency} ${title.toLowerCase()}, relative cash flow scale`}
-          className="h-[300px] w-full aspect-auto"
+          className="h-60 w-full aspect-auto"
         >
           <BarChart
             accessibilityLayer
@@ -493,8 +486,10 @@ export function ExpenseCharts({ charts }) {
           <h3 className="text-sm font-semibold text-muted-foreground">
             {item.currency}
           </h3>
-          <MonthlyChart key={view} item={item} net={view === "net"} />
-          {item.ranking.length > 0 && <AnnualChart item={item} />}
+          <div className="grid items-start gap-3 xl:grid-cols-2">
+            <MonthlyChart key={view} item={item} net={view === "net"} />
+            {item.ranking.length > 0 && <AnnualChart item={item} />}
+          </div>
         </section>
       ))}
     </section>

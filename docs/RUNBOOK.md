@@ -383,7 +383,9 @@ Use **Monthly chart view** above the tables to switch between grouped monthly
 expenses/income and monthly net income (income minus expenses); only one is
 shown at a time. Chart data tables always include January-December and a
 **Totals** footer; months beyond today's cutoff contain zero due activity.
-Expense-category rankings offer **Bar chart / Donut chart** controls. Donuts show
+The two compact chart cards sit side by side on wide screens and stack on mobile.
+Like the monthly selector, **Category chart view** offers **Bar chart / Donut chart**.
+Donuts show
 only the displayed categories' shares and are disabled for signed totals or
 all-zero geometry. Their data table includes **Sum** and **Average** of the
 displayed categories; this average is not per month. Positive net bars

@@ -417,7 +417,10 @@ side, or a **Bar Chart - Negative** shows monthly net income (income minus
 expenses). Positive net bars mean surplus, negative bars mean deficit, with a
 visible zero baseline. **Monthly chart view** shows only one monthly chart at a
 time, defaulting to income and expenses, with the choice applied across currencies.
-Horizontal bars rank the top ten expense categories; **Donut chart** switches
+Both chart sections use compact cards and 240–260-pixel plots, arranged side by
+side on wide screens and stacked on smaller screens. Matching native select
+controls switch chart types. **Category chart view** defaults to **Bar chart**:
+horizontal bars rank the top ten expense categories; **Donut chart** switches
 to their relative shares with named exact-value legend entries. Donuts are
 disabled when displayed totals are negative or all plot coordinates are zero;
 refunds are never converted into positive slices. **Bar chart** restores ranking.

@@ -704,7 +704,7 @@ flowchart LR
         AnalysisUI["Annual expense tables followed by income tables, by currency; year navigation and expandable category details"]
         Frontend -->|"Exact monthly/yearly aggregates, no raw financial rows"| AnalysisUI
         AnalysisUI -->|"URL year selection"| Frontend
-        ChartsUI["Shadcn monthly view switch; January-December exact totals; bar/donut expense ranking with Sum/Average; period comparisons"]
+        ChartsUI["Compact responsive chart cards with native view selectors; January-December exact totals; bar/donut expense ranking with Sum/Average; period comparisons"]
         Frontend -->|"Exact amount strings and dimensionless geometry"| ChartsUI
         ChartsUI -->|"Session-checked read-only period comparison"| Frontend
     end
@@ -1534,6 +1534,8 @@ sequenceDiagram
     participant Action as Next.js read-only comparison action
     participant API as FastAPI summary service
     participant DB as PostgreSQL
+    User->>UI: Switch monthly or category chart using labelled native selects
+    UI-->>User: Update compact responsive plot locally, preserving exact data
     User->>UI: Select 2-6 months, years, or inclusive yearly-average ranges
     User->>UI: Compare periods
     UI->>Action: Closed same-kind selections, no owner or monetary inputs

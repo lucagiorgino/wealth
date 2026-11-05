@@ -131,7 +131,7 @@ test("negative expense creation, editing and charts preserve exact values and is
   ).toHaveAttribute("stroke-width", "1.5");
   await expect(page.getByText("-100%", { exact: true }).first()).toBeVisible();
   await expect(
-    page.getByRole("button", { name: "Donut chart", exact: true }),
+    page.getByRole("option", { name: "Donut chart", exact: true }),
   ).toBeDisabled();
   await expect(
     page.getByText(/Donut view requires nonnegative category totals/),
