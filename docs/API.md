@@ -556,7 +556,8 @@ implemented. The frontend states this scope and confirms deletion.
   "as_of": "2026-11-03",
   "summary": {
     "currencies": [],
-    "wallet_expenses": []
+    "wallet_expenses": [],
+    "charts": []
   }
 }
 ```
@@ -638,11 +639,28 @@ expense totals can have either sign.
 Each transfer is counted once, and never enters `net`.
 Currencies are never added together or converted.
 
+`charts` has one object per currency, in the same order as `currencies`:
+`currency`, `expenses`, `income`, and `cashflow`. Expenses and income contain
+all matching main-category totals, ordered by name then UUID, without double
+counting subcategories. Each point has `key` (category UUID), `label` (name),
+exact decimal-string `amount`, and signed integer `value` in -10000..10000.
+Python derives dimensionless geometry using exact ratios, separately for each
+kind/currency; monetary amounts are never converted to browser numbers.
+`cashflow` contains income, expense, and net points in that order, with the
+corresponding keys and exact currency totals. Its scale is the largest absolute
+total for that currency. The UI renders its labelled net bar only.
+Transfers and balance adjustments do not enter category charts or net.
+Donuts show nonnegative category shares and exact center totals; negative
+category totals instead show a neutral ring, an explicit explanation and signed
+category data, never absolute-value shares. Zero totals retain exact category
+data without inventing activity.
+
 `wallet_expenses` contains only wallets with matching expenses, ordered by name
 then UUID. Each object has `wallet_id`, `wallet_name`, `currency`, and exact
 decimal-string `amount`. Expenses belong to the source wallet; income and
 transfers never enter this breakdown. No owner fields are returned.
-For no matches both arrays are empty. Out-of-range pages still return the complete
+Wallet totals may be zero when expenses and refunds cancel.
+For no matches all three arrays are empty. Out-of-range pages still return the complete
 filtered summary, just as they retain the actual filtered count.
 The count and summary share one materialized filtered projection and the paginated
 rows share its read-only repeatable-read snapshot. No aggregates are stored,

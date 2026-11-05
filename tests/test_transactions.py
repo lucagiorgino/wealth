@@ -1928,6 +1928,38 @@ def test_transaction_filtered_pagination_and_exact_amounts(transaction_database)
 
 
 @pytest.mark.integration
+def test_transaction_charts_preserve_cancelling_and_signed_category_totals(transaction_database):
+    client, _, _, data, _ = transaction_database
+    positive = client.post(
+        "/api/v1/categories", json={**CATEGORY, "name": "Positive spending"}
+    ).json()["id"]
+    negative = client.post("/api/v1/categories", json={**CATEGORY, "name": "Refunds"}).json()["id"]
+    for category_id, amount in [
+        (data["category_id"], "7"),
+        (data["category_id"], "-7"),
+        (positive, "10"),
+        (negative, "-10"),
+    ]:
+        response = client.post(
+            "/api/v1/transactions",
+            json={**data, "category_id": category_id, "subcategory_id": None, "amount": amount},
+        )
+        assert response.status_code == 201
+    summary = client.get("/api/v1/transactions").json()["summary"]
+    assert summary["currencies"][0]["expense"] == summary["currencies"][0]["net"] == "0"
+    assert summary["wallet_expenses"][0]["amount"] == "0"
+    chart = summary["charts"][0]
+    points = {point["key"]: (point["amount"], point["value"]) for point in chart["expenses"]}
+    assert points == {
+        data["category_id"]: ("0", 0),
+        positive: ("10", 10000),
+        negative: ("-10", -10000),
+    }
+    assert chart["income"] == []
+    assert all(point["amount"] == "0" and point["value"] == 0 for point in chart["cashflow"])
+
+
+@pytest.mark.integration
 def test_transaction_summary_is_exact_filtered_owner_scoped_and_not_paginated(transaction_database):
     client, identity, owners, data, destination = transaction_database
     foreign_currency_wallet = client.post(
@@ -2002,6 +2034,20 @@ def test_transaction_summary_is_exact_filtered_owner_scoped_and_not_paginated(tr
             "amount": "4.25",
         },
     ]
+    eur_charts, usd_charts = first["summary"]["charts"]
+    assert eur_charts["currency"] == "EUR" and usd_charts["currency"] == "USD"
+    assert eur_charts["expenses"] == [
+        {
+            "key": data["category_id"],
+            "label": CATEGORY["name"],
+            "amount": "5.000000000000000001",
+            "value": 10000,
+        }
+    ]
+    assert eur_charts["income"][0]["key"] == income_category["category_id"]
+    assert eur_charts["income"][0]["amount"] == first["summary"]["currencies"][0]["income"]
+    assert [point["value"] for point in eur_charts["cashflow"]] == [10000, 0, 10000]
+    assert [point["amount"] for point in usd_charts["cashflow"]] == ["0", "4.25", "-4.25"]
     for page in [2, 99]:
         assert client.get(query + f"&page={page}").json()["summary"] == first["summary"]
     filtered = client.get(query + f"&wallet_id={destination}").json()
@@ -2017,12 +2063,13 @@ def test_transaction_summary_is_exact_filtered_owner_scoped_and_not_paginated(tr
     assert income_only["currencies"][0]["net"] == "12345678901234567895.123456789012345679"
     assert income_only["currencies"][0]["expense"] == "0"
     assert income_only["currencies"][0]["transfer"] == "0"
+    assert income_only["charts"][0]["expenses"] == []
     for extra in ["&q=absent", f"&wallet_id={other_wallet}", "&date_from=2027-01-01"]:
         if extra.startswith("&date_from"):
             empty = client.get("/api/v1/transactions?date_from=2027-01-01").json()
         else:
             empty = client.get(query + extra).json()
-        assert empty["summary"] == {"currencies": [], "wallet_expenses": []}
+        assert empty["summary"] == {"currencies": [], "wallet_expenses": [], "charts": []}
         assert empty["total"] == 0
 
 
@@ -2220,6 +2267,9 @@ def test_negative_expenses_increase_balance_and_reduce_all_due_spending_aggregat
         assert listed.summary.currencies[0].expense == -15
         assert listed.summary.currencies[0].net == 15
         assert listed.summary.wallet_expenses[0].amount == -15
+        assert listed.summary.charts[0].expenses[0].amount == -15
+        assert listed.summary.charts[0].expenses[0].value == -10000
+        assert [point.value for point in listed.summary.charts[0].cashflow] == [0, -10000, 10000]
         balance = await wallets.list_wallets(owners[0], 1, 100, date(2024, 2, 29))
         assert (
             next(

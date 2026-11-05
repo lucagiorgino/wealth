@@ -13,6 +13,7 @@ from app.schemas.transactions import (
     TransactionOptions,
     TransactionSummary,
 )
+from app.services.transaction_summary import transaction_charts
 
 
 class TransactionNotFound(Exception):
@@ -261,12 +262,19 @@ async def list_transactions(
                     currency, sum(amount)::text AS amount
                 FROM filtered WHERE type = 'expense'
                 GROUP BY source_wallet_id, source_wallet_name, currency
+            ), category_totals AS (
+                SELECT type, category_id, category_name, currency,
+                    sum(amount)::text AS amount
+                FROM filtered WHERE type IN ('income', 'expense')
+                GROUP BY type, category_id, category_name, currency
             )
             SELECT (SELECT count(*) FROM filtered) AS total,
                 COALESCE((SELECT jsonb_agg(to_jsonb(c) ORDER BY currency)
                     FROM currency_totals c), '[]'::jsonb) AS currencies,
                 COALESCE((SELECT jsonb_agg(to_jsonb(w) ORDER BY wallet_name, wallet_id)
-                    FROM wallet_totals w), '[]'::jsonb) AS wallet_expenses
+                    FROM wallet_totals w), '[]'::jsonb) AS wallet_expenses,
+                COALESCE((SELECT jsonb_agg(to_jsonb(c) ORDER BY category_name, category_id)
+                    FROM category_totals c), '[]'::jsonb) AS categories
             """,
             all_parameters,
         )
@@ -288,6 +296,8 @@ async def list_transactions(
             total=totals["total"],
             as_of=as_of,
             summary=TransactionSummary(
-                currencies=totals["currencies"], wallet_expenses=totals["wallet_expenses"]
+                currencies=totals["currencies"],
+                wallet_expenses=totals["wallet_expenses"],
+                charts=transaction_charts(totals["currencies"], totals["categories"]),
             ),
         )

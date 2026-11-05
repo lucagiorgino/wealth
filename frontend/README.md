@@ -316,10 +316,18 @@ Pins persist server-side and sort matching occurrences before pagination, withou
 changing filters, occurrence projection, totals or balances.
 See [the bulk API contract](../docs/API.md#bulk-updates-deletion-and-pins).
 
-A Summary precedes the list with Expenses, Income, Transfers, and Net income
-(income minus expenses; transfers excluded). It covers all matching occurrences
+A Summary precedes the list with shadcn-style Expenses and Income donuts with
+exact totals in their centers, and a labelled Net income bar (income minus
+expenses). The separate Transfers section is removed; transfers and adjustments
+remain available in history but never enter net income. Donut slices use all
+matching main categories, with exact colored tooltips and expandable category
+values. Negative category totals show an explained neutral ring and signed
+values instead of false positive shares. Empty/zero charts remain explicit.
+Net bars expose a zero baseline and an exact value label.
+It covers all matching occurrences
 across pagination and respects every active filter, using API-provided exact
-totals rather than browser arithmetic. Multiple currencies are shown separately,
+totals and dimensionless chart geometry rather than browser arithmetic.
+Multiple currencies are shown separately,
 never converted or combined. **Expenses by wallet** uses the existing shadcn
 Collapsible, closed by default, with exact source-wallet expense totals only.
 Opening it persists across pagination; changing filters/period resets it closed.

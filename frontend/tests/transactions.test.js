@@ -60,6 +60,30 @@ const occurrence = {
   currency: "EUR",
 };
 const summary = {
+  charts: [
+    {
+      currency: "EUR",
+      expenses: [
+        { key: id, label: "Food", amount: input.amount, value: 10000 },
+      ],
+      income: [],
+      cashflow: [
+        { key: "income", label: "Income", amount: "0", value: 0 },
+        {
+          key: "expense",
+          label: "Expenses",
+          amount: input.amount,
+          value: 10000,
+        },
+        {
+          key: "net",
+          label: "Net income",
+          amount: `-${input.amount}`,
+          value: -10000,
+        },
+      ],
+    },
+  ],
   currencies: [
     {
       currency: "EUR",
@@ -150,6 +174,18 @@ test("balance adjustments are signed, category-free, next-month reconciliations"
             total: 1,
             as_of: "2026-01-31",
             summary: {
+              charts: [
+                {
+                  currency: "EUR",
+                  expenses: [],
+                  income: [],
+                  cashflow: summary.charts[0].cashflow.map((point) => ({
+                    ...point,
+                    amount: "0",
+                    value: 0,
+                  })),
+                },
+              ],
               currencies: [
                 {
                   currency: "EUR",
@@ -596,6 +632,31 @@ test("transaction summaries retain exact signed totals and reject malformed or m
     ...listing,
     transactions: [{ ...occurrence, amount: "-12.123456789012345678" }],
     summary: {
+      charts: [
+        {
+          ...summary.charts[0],
+          expenses: [
+            {
+              ...summary.charts[0].expenses[0],
+              amount: "-12.123456789012345678",
+              value: -10000,
+            },
+          ],
+          cashflow: [
+            summary.charts[0].cashflow[0],
+            {
+              ...summary.charts[0].cashflow[1],
+              amount: "-12.123456789012345678",
+              value: -10000,
+            },
+            {
+              ...summary.charts[0].cashflow[2],
+              amount: "12.123456789012345678",
+              value: 10000,
+            },
+          ],
+        },
+      ],
       currencies: [
         {
           currency: "EUR",
@@ -619,6 +680,42 @@ test("transaction summaries retain exact signed totals and reject malformed or m
     ).summary,
     signed.summary,
   );
+  const zeroSummary = {
+    currencies: [
+      { currency: "EUR", income: "0", expense: "0", transfer: "0", net: "0" },
+    ],
+    wallet_expenses: [{ ...summary.wallet_expenses[0], amount: "0" }],
+    charts: [
+      {
+        currency: "EUR",
+        expenses: [{ ...summary.charts[0].expenses[0], amount: "0", value: 0 }],
+        income: [],
+        cashflow: summary.charts[0].cashflow.map((point) => ({
+          ...point,
+          amount: "0",
+          value: 0,
+        })),
+      },
+    ],
+  };
+  const cancelling = {
+    ...listing,
+    total: 2,
+    transactions: [
+      { ...occurrence, amount: "7" },
+      { ...occurrence, id: destination, amount: "-7" },
+    ],
+    summary: zeroSummary,
+  };
+  assert.deepEqual(
+    (
+      await fetchTransactions(
+        { ...options, fetchImpl: async () => Response.json(cancelling) },
+        { page: 1 },
+      )
+    ).summary,
+    zeroSummary,
+  );
   for (const invalid of [
     undefined,
     { currencies: [], wallet_expenses: [] },
@@ -628,6 +725,40 @@ test("transaction summaries retain exact signed totals and reject malformed or m
     { ...summary, currencies: [{ ...summary.currencies[0], net: "NaN" }] },
     { ...summary, currencies: [{ ...summary.currencies[0], currency: "XYZ" }] },
     { ...summary, currencies: [summary.currencies[0], summary.currencies[0]] },
+    { ...summary, charts: undefined },
+    { ...summary, charts: [] },
+    { ...summary, charts: [{ ...summary.charts[0], currency: "USD" }] },
+    {
+      ...summary,
+      charts: [
+        {
+          ...summary.charts[0],
+          expenses: [{ ...summary.charts[0].expenses[0], value: "10000" }],
+        },
+      ],
+    },
+    { ...summary, charts: [{ ...summary.charts[0], cashflow: [] }] },
+    {
+      ...summary,
+      charts: [
+        {
+          ...summary.charts[0],
+          cashflow: summary.charts[0].cashflow.map((point) => ({
+            ...point,
+            amount: "999",
+          })),
+        },
+      ],
+    },
+    {
+      ...summary,
+      charts: [
+        {
+          ...summary.charts[0],
+          income: [{ key: "bad", label: "Bad", amount: "-1", value: -10000 }],
+        },
+      ],
+    },
     {
       ...summary,
       wallet_expenses: [{ ...summary.wallet_expenses[0], amount: -1 }],
@@ -669,7 +800,7 @@ test("transaction summaries retain exact signed totals and reject malformed or m
     page_size: 10,
     total: 0,
     as_of: listing.as_of,
-    summary: { currencies: [], wallet_expenses: [] },
+    summary: { currencies: [], wallet_expenses: [], charts: [] },
   };
   assert.deepEqual(
     await fetchTransactions(

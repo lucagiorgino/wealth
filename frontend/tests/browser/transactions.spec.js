@@ -347,13 +347,12 @@ test("transactions support exact amounts, transfers, recurring series, filtered 
   ).toHaveCount(0);
   const summary = page.getByRole("region", { name: "Summary", exact: true });
   await expect(
-    summary
-      .getByRole("region", { name: "Transfers", exact: true })
-      .getByText(amount, { exact: true }),
-  ).toBeVisible();
+    summary.getByRole("region", { name: "Transfers", exact: true }),
+  ).toHaveCount(0);
   await expect(
     summary
       .getByRole("region", { name: "Net income", exact: true })
+      .locator('[data-slot="summary-total"]')
       .getByText("0", { exact: true }),
   ).toBeVisible();
   await expect(
@@ -482,6 +481,7 @@ test("transactions support exact amounts, transfers, recurring series, filtered 
   await expect(
     summary
       .getByRole("region", { name: "Net income", exact: true })
+      .locator('[data-slot="summary-total"]')
       .getByText(amount, { exact: true }),
   ).toBeVisible();
   await expectTypeColour(list.locator("tbody > tr").first(), "income");
@@ -616,6 +616,7 @@ test("transactions support exact amounts, transfers, recurring series, filtered 
   await expect(
     summary
       .getByRole("region", { name: "Net income", exact: true })
+      .locator('[data-slot="summary-total"]')
       .getByText("-222.75", { exact: true }),
   ).toBeVisible();
   const walletExpenses = summary.getByRole("button", {
@@ -801,11 +802,13 @@ test("transactions support exact amounts, transfers, recurring series, filtered 
   await expect(
     summary
       .getByRole("region", { name: "Net income", exact: true })
+      .locator('[data-slot="summary-total"]')
       .getByText("-2.50", { exact: true }),
   ).toBeVisible();
   await expect(
     summary
       .getByRole("region", { name: "Net income", exact: true })
+      .locator('[data-slot="summary-total"]')
       .getByText("10.100", { exact: true }),
   ).toBeVisible();
   await expect(
@@ -823,6 +826,53 @@ test("transactions support exact amounts, transfers, recurring series, filtered 
       .nth(4),
   ).toContainText("€ 2.50");
   await expect(walletExpenses).toHaveAttribute("aria-expanded", "false");
+  const euroExpenses = summary
+    .getByRole("region", { name: "Expenses", exact: true })
+    .getByRole("group", { name: "EUR expenses", exact: true });
+  await expect(euroExpenses.locator(".recharts-pie-sector")).toHaveCount(1);
+  const euroIncome = summary
+    .getByRole("region", { name: "Income", exact: true })
+    .getByRole("group", { name: "EUR income", exact: true });
+  await expect(euroIncome).toContainText("No nonzero category totals.");
+  const euroNet = summary
+    .getByRole("region", { name: "Net income", exact: true })
+    .getByRole("group", { name: "EUR net income", exact: true });
+  await expect(euroNet.locator(".recharts-bar-rectangle path")).toHaveCount(1);
+  const negativeBar = euroNet.locator(".recharts-bar-rectangle path");
+  const barBounds = await negativeBar.boundingBox();
+  const zeroBounds = await euroNet
+    .locator(".recharts-reference-line line")
+    .boundingBox();
+  const labelBounds = await euroNet
+    .locator("svg")
+    .getByText("-2.50", { exact: true })
+    .boundingBox();
+  expect(barBounds.y).toBeGreaterThanOrEqual(zeroBounds.y - 1);
+  expect(labelBounds.y).toBeGreaterThan(barBounds.y + barBounds.height);
+  const slice = euroExpenses.locator(".recharts-pie-sector path").first();
+  await expect(slice).toBeVisible();
+  const sliceBounds = await slice.boundingBox();
+  await slice.hover({ position: { x: sliceBounds.width / 2, y: 10 } });
+  await expect(
+    euroExpenses.locator("[data-slot=chart-tooltip-indicator]"),
+  ).toBeVisible();
+  await expect(
+    euroExpenses.locator("[data-slot=chart-tooltip-indicator]"),
+  ).toHaveCSS(
+    "background-color",
+    await euroExpenses
+      .locator(".recharts-pie-sector path")
+      .first()
+      .evaluate((node) => getComputedStyle(node).fill),
+  );
+  await expect(euroExpenses).toContainText("2.50");
+  await page.mouse.move(0, 0);
+  await euroExpenses
+    .getByRole("button", { name: "View expenses categories" })
+    .focus();
+  await page.keyboard.press("Enter");
+  await expect(euroExpenses.getByRole("definition")).toContainText("2.50");
+  await page.keyboard.press("Enter");
   await page.screenshot({
     path: testInfo.outputPath("transaction-summary-desktop.png"),
     fullPage: true,
@@ -864,6 +914,30 @@ test("transactions support exact amounts, transfers, recurring series, filtered 
     fullPage: true,
     animations: "disabled",
   });
+  expect(
+    (
+      await request.post(`${api}/api/v1/transactions`, {
+        headers,
+        data: {
+          date: "2023-05-01",
+          description: "Euro refund",
+          type: "expense",
+          amount: "-3",
+          source_wallet_id: wallets[0].id,
+          category_id: category.id,
+          destination_wallet_id: null,
+          subcategory_id: null,
+          recurrence: null,
+          recurrence_count: null,
+        },
+      })
+    ).status(),
+  ).toBe(201);
+  await page.reload();
+  await expect(euroExpenses).toContainText(
+    "Negative category totals cannot be shown as donut shares.",
+  );
+  await expect(euroExpenses.getByRole("definition")).toContainText("-0.50");
   expect(await page.content()).not.toContain(transactionTestToken);
 });
 

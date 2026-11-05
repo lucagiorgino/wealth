@@ -26,7 +26,7 @@
 | Paginated/filterable SSR Transactions page, dependent selectors, series editing and confirmed deletion                         | `frontend/app/(app)/transactions/`, `frontend/components/transaction-*.jsx`; `frontend/tests/transactions.test.js`, `frontend/tests/browser/transactions.spec.js`                                       |
 | Compact wallet-icon transaction rows, three-dot actions, page-scoped bulk editing/deletion and persistent whole-series pins | Migration `013_transaction_pins.sql`, transaction schemas/services/persistence, shared partial form and owner-scoped atomic bulk routes; database refusal/rollback/pagination tests, frontend unit tests and `transaction-bulk.spec.js` |
 | Month-based transaction workspace, search/filter overlays, illustrated empty state, and toolbar creation dialog                | `frontend/components/transaction-workspace.jsx`, `transaction-empty.jsx`, registry primitives, URL-period unit tests, desktop/mobile browser workflows                                                  |
-| Separate year/month controls, exact currency-labelled amounts, whole-filter summaries and collapsed wallet expenses | Transaction listing schemas/query, `transaction-summary.jsx`, `money-amount.jsx`; database summary/recurrence, adapter and browser tests |
+| Transaction type switches, category donuts with exact center totals, signed net bars and collapsed wallet expenses | Transaction listing schemas/query, `transaction_summary.py`, `transaction-summary.jsx`, `money-amount.jsx`; database aggregation/recurrence, adapter refusal and responsive browser tests |
 | Private annual expense/income analysis, monthly/yearly category/subcategory tables, grouped monthly bars and diverging net bars | `app/api/summary.py`, `app/services/summary.py`, `app/db/summary.py`, `app/schemas/summary.py`, `/summary`, `expense-summary.jsx`, `expense-charts.jsx`; database, adapter and browser tests |
 | Shadcn category-ranking/monthly-trend charts and 2–6-period month/year/yearly-range-average comparisons | `app/db/expense_comparisons.py`, Summary schemas/services/routes, `expense-charts.jsx`, `expense-comparison.jsx`, registry Chart/Recharts; exact geometry/rounding, private transport, and browser comparison tests |
 | Dedicated Compare spending page and reorderable sixth sidebar entry | `/compare-spending`, independently authenticated page/action, migration `014_comparison_navigation.sql`; saved-order migration, settings, private-route and responsive comparison browser tests |
@@ -751,7 +751,7 @@ flowchart LR
         TransactionTable["Header type switches; selection, wallet icons, description/categories with type badges, short dates, exact signed amounts and sticky three-dot menus"]
         Workspace -->|"Pinned section then month groups; preserve server order"| TransactionTable
         TransactionTable -->|"Session-checked edits, pins and atomic bulk changes/deletion"| Frontend
-        SummaryUI["Income, expense, transfer and net totals by currency; collapsed wallet expenses"]
+        SummaryUI["Category income/expense donuts with exact center totals; labelled net bars; collapsed wallet expenses"]
         Workspace --> SummaryUI
         Frontend -->|"Whole-filter exact totals, no unpaginated rows"| SummaryUI
         ImportUI["Shadcn CSV upload, field/format mapping, missing-record and predefined-match recap, and paginated transaction review"]
@@ -787,6 +787,7 @@ flowchart LR
     SettingsStore -->|"Read without provisioning; upsert only preference columns"| DB
     API -->|"Transaction listing and atomic bulk changes"| Service["Transaction service: fixed UTC recurrence horizon and owned checked-field batches"]
     API -->|"Transaction CRUD, signed amounts and typed references"| Store["Transaction persistence, generated category-family FK, occurrence projection and filtered currency/wallet aggregates"]
+    Store -->|"Whole-filter category and currency aggregates"| TransactionCharts["Transaction-summary service: exact signed dimensionless chart geometry"]
     API --> CategoryStore["Owned two-level categories; immutable root kind and optional income/expense presets"]
     CategoryStore --> DB
     Service --> Store
@@ -1670,17 +1671,19 @@ sequenceDiagram
     DB->>DB: Select owned definitions and project due dates anchored to original start
     Note over Service,DB: Include future initial entries, not future repetitions; no writes or scheduler
     DB->>DB: Apply literal description, type, either-wallet, category, and inclusive date filters
-    DB->>DB: Materialize filtered projection; count and sum exact totals by currency and expense wallet
+    DB->>DB: Materialize filtered projection; count and sum by currency, main category and expense wallet
     Note over Service,DB: Net is income minus expenses; transfers count once and never enter net
     DB->>DB: Order is_pinned descending, occurrence date descending with stable ties, select LIMIT/OFFSET page
     DB-->>Service: Owner-scoped page, count, whole-filter currency totals and wallet expenses
+    Service->>Service: Generate signed category and cashflow geometry using exact ratios, without money conversion
     Service-->>API: Exact amounts and totals, wallet currencies, dates/numbers, and as_of
     API-->>SSR: Private no-store response, wallet/category names
     SSR-->>UI: Owned result and filter props without API tokens
     UI->>UI: Group pinned entries first, then occurrence months without changing server order
     UI->>UI: Render labelled income/expense/transfer badges with green/red/blue theme pairs
     UI->>UI: Add currency symbols without rounding; omit redundant monthly table headings
-    UI-->>User: Separate year/month controls, currency-separated summary, tables or empty state, and page links
+    UI-->>User: Income/expense donuts with exact center totals, labelled net bars, type switches, tables and page links
+    Note over User,UI: Currencies stay separate; negative category totals show explained neutral rings and exact signed data; no transfer summary card
     opt Expand wallet expenses, closed by default
         User->>UI: Toggle Expenses by wallet
         UI-->>User: Already fetched exact source-wallet expense totals

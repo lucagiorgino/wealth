@@ -346,11 +346,16 @@ Migration `013_transaction_pins.sql` adds the default-false preference.
 
 The listing response includes whole-filter exact totals by currency for income,
 expenses, transfers, and income minus expenses (excluding transfers), plus
-source-wallet expense totals. PostgreSQL aggregates a materialized filtered
+source-wallet expense totals and category-level income/expense chart data.
+PostgreSQL aggregates a materialized filtered
 occurrence projection before pagination, with summary/count/page sharing a
 read-only snapshot. The frontend never fetches all financial rows or recomputes
 money totals. Different currencies are never combined. A shadcn Collapsible
 keeps the wallet breakdown closed by default.
+The transaction-summary service reuses exact signed geometry helpers. Income
+and expense donuts show category shares with exact center totals; the net
+metric uses a labelled signed bar. Negative category totals are not coerced
+into donut slices. Transfers remain supported without a separate summary card.
 Summaries follow history's first-future-entry scope, not current wallet balances.
 No aggregate table or migration is introduced.
 

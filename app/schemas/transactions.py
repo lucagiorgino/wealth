@@ -6,6 +6,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, field_validator, model_validator
 
+from app.schemas.summary import PlotPoint
 from app.schemas.wallets import WalletAppearance
 
 TransactionType = Literal["income", "expense", "transfer", "balance_adjustment"]
@@ -117,9 +118,17 @@ class WalletExpenseTotal(BaseModel):
     amount: Decimal
 
 
+class TransactionCurrencyCharts(BaseModel):
+    currency: str
+    expenses: list[PlotPoint]
+    income: list[PlotPoint]
+    cashflow: list[PlotPoint]
+
+
 class TransactionSummary(BaseModel):
     currencies: list[TransactionCurrencyTotals]
     wallet_expenses: list[WalletExpenseTotal]
+    charts: list[TransactionCurrencyCharts]
 
 
 class TransactionList(BaseModel):

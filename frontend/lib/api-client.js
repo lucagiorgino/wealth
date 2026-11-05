@@ -558,6 +558,11 @@ function validateTransactionSummary(summary, total) {
   if (
     !Array.isArray(summary?.currencies) ||
     !Array.isArray(summary.wallet_expenses) ||
+    !Array.isArray(summary.charts) ||
+    summary.charts.length !== summary.currencies.length ||
+    summary.charts.some(
+      (item, index) => item?.currency !== summary.currencies[index]?.currency,
+    ) ||
     (total === 0
       ? summary.currencies.length !== 0
       : summary.currencies.length === 0) ||
@@ -578,8 +583,7 @@ function validateTransactionSummary(summary, total) {
         typeof item.wallet_name !== "string" ||
         !item.wallet_name.trim() ||
         !summary.currencies.some((total) => total.currency === item.currency) ||
-        !validAmount(item.amount, true) ||
-        !/[1-9]/.test(item.amount.split(/[eE]/)[0]),
+        !validAmount(item.amount, true),
     ) ||
     new Set(summary.wallet_expenses.map((item) => item.wallet_id)).size !==
       summary.wallet_expenses.length
@@ -587,6 +591,25 @@ function validateTransactionSummary(summary, total) {
     console.error("Backend returned an invalid transaction summary");
     throw new BackendError(502);
   }
+  const charts = summary.charts.map((item, index) => {
+    const expenses = validatePlotPoints(item.expenses);
+    const income = validatePlotPoints(item.income);
+    const cashflow = validatePlotPoints(item.cashflow, [
+      "income",
+      "expense",
+      "net",
+    ]);
+    if (
+      income.some((point) => point.amount.startsWith("-") || point.value < 0) ||
+      cashflow.some(
+        (point) => point.amount !== summary.currencies[index][point.key],
+      )
+    ) {
+      console.error("Backend returned inconsistent transaction charts");
+      throw new BackendError(502);
+    }
+    return { currency: item.currency, expenses, income, cashflow };
+  });
   return {
     currencies: summary.currencies.map(
       ({ currency, income, expense, transfer, net }) => ({
@@ -605,6 +628,7 @@ function validateTransactionSummary(summary, total) {
         amount,
       }),
     ),
+    charts,
   };
 }
 

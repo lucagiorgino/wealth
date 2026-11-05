@@ -577,7 +577,41 @@ function transactionSummary(occurrences) {
         a.wallet_name.localeCompare(b.wallet_name) ||
         a.wallet_id.localeCompare(b.wallet_id),
     );
-  return { currencies, wallet_expenses };
+  const charts = currencies.map((total) => {
+    const categories = (type) => {
+      const items = occurrences.filter(
+        (item) => item.currency === total.currency && item.type === type,
+      );
+      return plotPoints(
+        [...new Set(items.map((item) => item.category_id))]
+          .map((id) => {
+            const matching = items.filter((item) => item.category_id === id);
+            return {
+              key: id,
+              label: matching[0].category_name,
+              amount: sumExact(matching.map((item) => item.amount)),
+            };
+          })
+          .sort(
+            (a, b) =>
+              a.label.localeCompare(b.label) || a.key.localeCompare(b.key),
+          ),
+      );
+    };
+    return {
+      currency: total.currency,
+      expenses: categories("expense"),
+      income: categories("income"),
+      cashflow: plotPoints(
+        [
+          ["income", "Income"],
+          ["expense", "Expenses"],
+          ["net", "Net income"],
+        ].map(([key, label]) => ({ key, label, amount: total[key] })),
+      ),
+    };
+  });
+  return { currencies, wallet_expenses, charts };
 }
 
 const server = createServer(async (request, response) => {
