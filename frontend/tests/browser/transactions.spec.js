@@ -363,7 +363,7 @@ test("transactions support exact amounts, transfers, recurring series, filtered 
     summary.getByRole("region", { name: "Wallet expense totals" }),
   ).toHaveCount(0);
   const transferCells = list.locator("tbody > tr").getByRole("cell");
-  await expect(transferCells.nth(5)).toContainText("€");
+  await expect(transferCells.nth(4)).toContainText("€");
   await expect(transferCells.nth(1)).toContainText("Transaction wallet 1");
   await expect(transferCells.nth(1)).toContainText("to Transaction wallet 12");
   await expect(transferCells.nth(2)).toContainText("Transaction category");
@@ -652,10 +652,34 @@ test("transactions support exact amounts, transfers, recurring series, filtered 
   expect(firstPageDates.at(-1) >= secondPageDate).toBe(true);
   await page.reload();
   await expect(pagination).toContainText("Page 2 of 2 - 11 transactions");
+  const types = page.getByRole("navigation", { name: "Transaction types" });
+  await expect(
+    types.getByRole("link", { name: "expense", exact: true }),
+  ).toHaveAttribute("aria-current", "page");
+  await expect(
+    list.getByRole("columnheader", { name: "Type", exact: true }),
+  ).toHaveCount(0);
+  await types.getByRole("link", { name: "All", exact: true }).click();
+  await expect(pagination).toContainText("Page 1 of 2 - 11 transactions");
+  const switched = new URL(page.url()).searchParams;
+  expect(switched.has("type")).toBe(false);
+  expect(switched.get("q")).toBe("Groceries");
+  expect(switched.get("wallet_id")).toBe(wallets[0].id);
+  expect(switched.get("category_id")).toBe(category.id);
+  expect(switched.get("date_from")).toBe("2026-04-01");
+  await expect(
+    types.getByRole("link", { name: "All", exact: true }),
+  ).toHaveAttribute("aria-current", "page");
+  await types.getByRole("link", { name: "expense", exact: true }).click();
+  await expect(
+    types.getByRole("link", { name: "expense", exact: true }),
+  ).toHaveAttribute("aria-current", "page");
+  await expect(pagination).toContainText("Page 1 of 2 - 11 transactions");
   await page
     .getByRole("navigation", { name: "Transaction months" })
     .getByRole("link", { name: "April 2026", exact: true })
     .click();
+  await expect(page).toHaveURL(/[?&]month=2026-04(?:&|$)/);
   await expect(pagination).toContainText("Page 1 of 2 - 11 transactions");
   expect(new URL(page.url()).searchParams.get("q")).toBe("Groceries");
   expect(new URL(page.url()).searchParams.get("month")).toBe("2026-04");
@@ -789,14 +813,14 @@ test("transactions support exact amounts, transfers, recurring series, filtered 
       .getByRole("row")
       .filter({ hasText: "Dollar income" })
       .getByRole("cell")
-      .nth(5),
+      .nth(4),
   ).toContainText("$ 10.125");
   await expect(
     list
       .getByRole("row")
       .filter({ hasText: "Euro expense" })
       .getByRole("cell")
-      .nth(5),
+      .nth(4),
   ).toContainText("€ 2.50");
   await expect(walletExpenses).toHaveAttribute("aria-expanded", "false");
   await page.screenshot({

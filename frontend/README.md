@@ -272,6 +272,10 @@ Default ordering
 is pinned first, then occurrence date descending, using the API's stable server-side order
 before pagination rather than sorting one page in the browser.
 Each table has semantic headers and an announced descending Date column.
+The history header has compact All, income, expense, transfer, and Balance
+Adjustment switches. They use the existing server-side type filter, preserve
+the other filters and selected period, and reset pagination/selection. The
+separate Type column is removed; type badges sit with each description instead.
 Keyboard-focusable horizontal scrolling keeps wide tables within the viewport;
 sticky row actions remain reachable on small screens. Amounts remain exact,
 right-aligned strings with the source wallet's currency symbol beside the

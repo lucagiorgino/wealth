@@ -93,7 +93,6 @@ test("compact transaction rows support persistent pins, page-scoped selection an
     "Wallet",
     "Description and categories",
     "Date",
-    "Type",
     "Amount",
     "Actions",
   ]);

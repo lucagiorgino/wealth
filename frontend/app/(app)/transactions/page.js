@@ -21,6 +21,8 @@ import {
   TransactionInputError,
   transactionView,
   transactionViewQuery,
+  transactionTypes,
+  transactionTypeLabel,
 } from "@/lib/transactions";
 
 export const metadata = { title: "Transactions" };
@@ -112,13 +114,43 @@ export default async function Transactions({ searchParams }) {
             aria-labelledby="transactions-heading"
             className="flex flex-1 flex-col gap-6"
           >
-            <h2
-              id="transactions-heading"
-              tabIndex={-1}
-              className="w-fit rounded text-lg font-semibold focus:outline-2 focus:outline-offset-4 focus:outline-ring"
-            >
-              Your transactions
-            </h2>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <h2
+                id="transactions-heading"
+                tabIndex={-1}
+                className="w-fit rounded text-lg font-semibold focus:outline-2 focus:outline-offset-4 focus:outline-ring"
+              >
+                Your transactions
+              </h2>
+              <nav
+                aria-label="Transaction types"
+                className="flex flex-wrap gap-1.5"
+              >
+                {["", ...transactionTypes].map((type) => {
+                  const selected = (filters.type ?? "") === type;
+                  const next = { ...filters };
+                  if (type) next.type = type;
+                  else delete next.type;
+                  return (
+                    <Button
+                      key={type}
+                      asChild
+                      size="sm"
+                      variant={selected ? "secondary" : "outline"}
+                      className="min-h-11 rounded-full capitalize"
+                    >
+                      <Link
+                        href={`/transactions?${transactionViewQuery(next, month, 1)}`}
+                        aria-current={selected ? "page" : undefined}
+                        scroll={false}
+                      >
+                        {type ? transactionTypeLabel(type) : "All"}
+                      </Link>
+                    </Button>
+                  );
+                })}
+              </nav>
+            </div>
             {month === "all" && (
               <p className="text-sm text-muted-foreground">
                 {filters.date_from || filters.date_to

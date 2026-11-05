@@ -534,6 +534,20 @@ function TransactionEntry({
             : item.category_name}
           {item.subcategory_name && ` / ${item.subcategory_name}`}
         </p>
+        <Badge
+          variant="secondary"
+          className={`gap-1.5 capitalize ${
+            {
+              income: "bg-income text-income-foreground",
+              expense: "bg-expense text-expense-foreground",
+              transfer: "bg-transfer text-transfer-foreground",
+              balance_adjustment: "bg-muted text-muted-foreground",
+            }[item.type]
+          }`}
+        >
+          <Icon aria-hidden="true" className="size-3.5" />
+          {transactionTypeLabel(item.type)}
+        </Badge>
         {item.recurrence && (
           <div className="flex items-start gap-1.5 text-xs text-muted-foreground">
             <Repeat2 aria-hidden="true" className="mt-0.5 size-3.5 shrink-0" />
@@ -554,22 +568,6 @@ function TransactionEntry({
         >
           {transactionDateLabel(item.occurrence_date, today)}
         </time>
-      </TableCell>
-      <TableCell className="px-3 py-3">
-        <Badge
-          variant="secondary"
-          className={`gap-1.5 capitalize ${
-            {
-              income: "bg-income text-income-foreground",
-              expense: "bg-expense text-expense-foreground",
-              transfer: "bg-transfer text-transfer-foreground",
-              balance_adjustment: "bg-muted text-muted-foreground",
-            }[item.type]
-          }`}
-        >
-          <Icon aria-hidden="true" className="size-3.5" />
-          {transactionTypeLabel(item.type)}
-        </Badge>
       </TableCell>
       <TableCell
         className={`px-3 py-3 text-right font-semibold whitespace-normal tabular-nums [overflow-wrap:anywhere] ${display.positive ? "text-primary-ink" : ""}`}
@@ -890,7 +888,7 @@ export function TransactionList({
               className="overflow-x-auto rounded-lg border bg-card outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 [&>[data-slot=table-container]]:overflow-visible"
             >
               <Table
-                className="min-w-[920px] table-fixed"
+                className="min-w-[808px] table-fixed"
                 aria-label={`Transactions for ${label}`}
               >
                 <TableCaption className="sr-only">
@@ -935,9 +933,6 @@ export function TransactionList({
                         Date{" "}
                         <ArrowDown aria-hidden="true" className="size-3.5" />
                       </span>
-                    </TableHead>
-                    <TableHead scope="col" className="w-28 px-3">
-                      Type
                     </TableHead>
                     <TableHead scope="col" className="w-44 px-3 text-right">
                       Amount

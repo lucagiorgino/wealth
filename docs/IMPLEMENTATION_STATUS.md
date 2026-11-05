@@ -748,7 +748,7 @@ flowchart LR
         Workspace["Shadcn separate year picker and centered twelve-month rail with narrow-screen horizontal scrolling, visible filters, month-grouped tables, editors and deletion alerts"]
         Frontend -->|"Owned data props, no API tokens"| Workspace
         Workspace -->|"URL filters and form actions"| Frontend
-        TransactionTable["Selection, wallet icons, description/categories, short dates, type badges, exact signed amounts and sticky three-dot menus"]
+        TransactionTable["Header type switches; selection, wallet icons, description/categories with type badges, short dates, exact signed amounts and sticky three-dot menus"]
         Workspace -->|"Pinned section then month groups; preserve server order"| TransactionTable
         TransactionTable -->|"Session-checked edits, pins and atomic bulk changes/deletion"| Frontend
         SummaryUI["Income, expense, transfer and net totals by currency; collapsed wallet expenses"]
@@ -1655,7 +1655,8 @@ sequenceDiagram
     participant API as FastAPI
     participant Service as Transaction service
     participant DB as PostgreSQL
-    User->>UI: Choose separate year/month, submit filters, or follow page link
+    User->>UI: Choose year/month, header type switch, filters, or page link
+    Note over User,UI: Type switches preserve other filters and reset pagination and selection; badges replace the separate Type column
     Note over User,UI: Month strip centers when it fits; horizontal scrolling keeps every month reachable on narrow screens
     UI->>SSR: GET /transactions with URL month, filters, and page
     SSR->>SSR: Require session and validate URL
