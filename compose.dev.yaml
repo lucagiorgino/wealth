@@ -1,0 +1,28 @@
+services:
+  backend:
+    init: true
+    command:
+      - python
+      - -m
+      - uvicorn
+      - app.main:app
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8000"
+      - --reload
+      - --reload-dir
+      - /app/app
+    volumes:
+      - ./app:/app/app:ro
+
+  frontend:
+    build:
+      target: development
+    init: true
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+      - /app/.next
+    healthcheck:
+      start_period: 60s

@@ -1,0 +1,4 @@
+export const avatarPng = Buffer.from(
+  "iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAIAAABLbSncAAAAFElEQVR4nGMUstrDgA0wYRUdtBIA0o4BGByXxNkAAAAASUVORK5CYII=",
+  "base64",
+);

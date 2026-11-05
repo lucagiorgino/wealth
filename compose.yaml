@@ -1,0 +1,125 @@
+name: wealth
+
+services:
+  postgres:
+    image: postgres:17-bookworm
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-wealth}
+      POSTGRES_USER: ${POSTGRES_USER:-wealth}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Copy .env.example to .env first}
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  migrate:
+    build:
+      context: .
+      dockerfile: docker/backend.Dockerfile
+      target: runtime
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-wealth}:${POSTGRES_PASSWORD:?Copy .env.example to .env first}@postgres:5432/${POSTGRES_DB:-wealth}
+    command: ["python", "-m", "app.db.migrate"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  backend:
+    build:
+      context: .
+      dockerfile: docker/backend.Dockerfile
+      target: runtime
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-wealth}:${POSTGRES_PASSWORD:?Copy .env.example to .env first}@postgres:5432/${POSTGRES_DB:-wealth}
+    ports:
+      - "127.0.0.1:8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/ready', timeout=5)"]
+      interval: 10s
+      timeout: 6s
+      retries: 10
+
+  frontend:
+    build:
+      context: .
+      dockerfile: docker/frontend.Dockerfile
+      target: runtime
+    env_file:
+      - path: frontend/.env.local
+        required: false
+    environment:
+      APP_ENV: development
+      APP_BASE_URL: http://localhost:3000
+      BACKEND_API_URL: http://backend:8000
+    ports:
+      - "127.0.0.1:3000:3000"
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000').then(r => { if (!r.ok) process.exit(1) }).catch(() => process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  postgres-test:
+    profiles: ["test"]
+    image: postgres:17-bookworm
+    environment:
+      POSTGRES_DB: wealth_test
+      POSTGRES_USER: wealth_test
+      POSTGRES_PASSWORD: local-test-only
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+
+  backend-test:
+    profiles: ["test"]
+    build:
+      context: .
+      dockerfile: docker/backend.Dockerfile
+      target: test
+    environment:
+      TEST_DATABASE_URL: postgresql://wealth_test:local-test-only@postgres-test:5432/wealth_test
+    depends_on:
+      postgres-test:
+        condition: service_healthy
+
+  frontend-test:
+    profiles: ["test"]
+    build:
+      context: .
+      dockerfile: docker/frontend.Dockerfile
+      target: test
+
+  frontend-browser:
+    profiles: ["test"]
+    build:
+      context: .
+      dockerfile: docker/frontend.Dockerfile
+      target: browser-test
+    init: true
+    shm_size: 1gb
+
+volumes:
+  postgres-data:

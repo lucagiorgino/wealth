@@ -1,0 +1,43 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "wealth"
+version = "0.1.0"
+description = "Personal expense, income, and asset tracking application."
+requires-python = ">=3.11"
+dependencies = [
+  "fastapi>=0.162,<1",
+  "uvicorn[standard]>=0.30,<1",
+  "pydantic-settings>=2.8,<3",
+  "psycopg[binary]>=3.2,<4",
+  "auth0-fastapi-api>=1.0.0b9,<2",
+  "pillow>=12,<13",
+]
+
+[project.optional-dependencies]
+dev = [
+  "httpx2>=2.16,<3",
+  "pytest>=8,<10",
+  "ruff>=0.15,<1",
+]
+
+[tool.setuptools.packages.find]
+include = ["app*"]
+
+[tool.setuptools.package-data]
+"app.db" = ["migrations/*.sql"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+filterwarnings = ["error::DeprecationWarning"]
+markers = ["integration: requires a dedicated PostgreSQL test database"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP"]
