@@ -201,6 +201,12 @@ same PostgreSQL backup/restore policy as other financial data.
 See [the exact contract](API.md#assets-and-patrimony) for missing-value, cutoff,
 reconstruction and no-conversion semantics.
 
+Apply `016_balance_adjustments.sql` before recording **Balance Adjustment**
+transactions. Enter a signed delta and posting date; it changes the first-day
+starting balance of the following UTC month, not the posting month's close.
+Leave category, destination and recurrence blank (including in CSV imports).
+It never contributes to P&L; see [the adjustment contract](API.md#balance-adjustments).
+
 ### Profile image imports
 
 Under **Account > Profile picture**, select **Custom image (upload)**, choose a

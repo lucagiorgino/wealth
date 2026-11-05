@@ -14,7 +14,7 @@ export const importFields = [
   ["type", "Type", true],
   ["source_wallet_id", "Source wallet", true],
   ["destination_wallet_id", "Destination wallet", false],
-  ["category_id", "Main category", true],
+  ["category_id", "Main category (except adjustments)", false],
   ["subcategory_id", "Subcategory", false],
   ["recurrence", "Recurrence", false],
   ["recurrence_count", "Recurrence count", false],

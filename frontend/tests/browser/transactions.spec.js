@@ -1,9 +1,75 @@
 import { expect, test } from "@playwright/test";
-import { transactionTestToken, walletTestOrigin } from "../browser-config.js";
+import {
+  transactionTestToken,
+  adjustmentTestToken,
+  walletTestOrigin,
+} from "../browser-config.js";
 import { signInTestUser } from "./session.js";
 import { transactionAction } from "./transaction-actions.js";
 
 test.use({ baseURL: walletTestOrigin });
+
+test("category-free Balance Adjustment changes only the following opening balance and stays P&L neutral", async ({
+  context,
+  page,
+  request,
+}) => {
+  await signInTestUser(context, adjustmentTestToken);
+  const headers = { Authorization: `Bearer ${adjustmentTestToken}` };
+  const api = "http://127.0.0.1:3102";
+  await request.post(`${api}/api/v1/wallets`, {
+    headers,
+    data: {
+      name: "Reconciliation wallet",
+      initial_amount: "100",
+      colour: "#123abc",
+      icon: "wallet",
+    },
+  });
+  await page.goto("/transactions?month=2024-01");
+  await page
+    .getByRole("button", { name: "Add transaction", exact: true })
+    .click();
+  const dialog = page.getByRole("dialog", { name: "Add a transaction" });
+  await dialog
+    .getByLabel("Type", { exact: true })
+    .selectOption("balance_adjustment");
+  await expect(dialog.getByLabel("Main category", { exact: true })).toHaveCount(
+    0,
+  );
+  await expect(dialog.getByLabel("Repeat", { exact: true })).toHaveCount(0);
+  await dialog
+    .getByLabel("Source wallet", { exact: true })
+    .selectOption({ label: "Reconciliation wallet" });
+  await dialog
+    .getByLabel("Amount", { exact: true })
+    .fill("-7.123456789012345678");
+  await dialog.getByLabel("Date", { exact: true }).fill("2024-01-31");
+  await dialog
+    .getByLabel("Description", { exact: true })
+    .fill("Reconcile opening");
+  await dialog
+    .getByRole("button", { name: "Add transaction", exact: true })
+    .click();
+  await expect(dialog).toBeHidden();
+  const row = page.getByRole("row").filter({ hasText: "Reconcile opening" });
+  await expect(row.locator('[data-slot="badge"]')).toHaveText(
+    "Balance Adjustment",
+  );
+  await expect(row).toContainText("effective 2024-02-01");
+  const response = await request.get(
+    `${api}/api/v1/transactions?type=balance_adjustment`,
+    { headers },
+  );
+  const result = await response.json();
+  expect(result.transactions[0].category_id).toBeNull();
+  expect(result.summary.wallet_expenses).toEqual([]);
+  expect(result.summary.currencies[0].net).toBe("0");
+  const wallets = await (
+    await request.get(`${api}/api/v1/wallets`, { headers })
+  ).json();
+  expect(wallets.wallets[0].current_amount).toBe("92.876543210987654322");
+});
 
 test("month strip stays centered, evenly padded, and scrollable on narrow screens", async ({
   context,

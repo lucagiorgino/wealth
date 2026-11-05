@@ -2,7 +2,25 @@ import { decimalAmount } from "./wallets.js";
 
 export class TransactionInputError extends Error {}
 
-export const transactionTypes = ["income", "expense", "transfer"];
+export const transactionTypes = [
+  "income",
+  "expense",
+  "transfer",
+  "balance_adjustment",
+];
+export const transactionTypeLabel = (type) =>
+  type === "balance_adjustment" ? "Balance Adjustment" : type;
+
+export function adjustmentEffectiveDate(value) {
+  if (!validDate(value) || value >= "9999-12-01")
+    throw new TransactionInputError(
+      "Choose an adjustment date with a valid following month.",
+    );
+  const effective = new Date(`${value}T00:00:00Z`);
+  effective.setUTCDate(1);
+  effective.setUTCMonth(effective.getUTCMonth() + 1);
+  return effective.toISOString().slice(0, 10);
+}
 export const recurrenceFrequencies = ["weekly", "monthly", "annually"];
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -38,12 +56,19 @@ export function validTransaction(data) {
     [...data.description.trim()].length <= 500 &&
     typeof data.amount === "string" &&
     decimalAmount.test(data.amount) &&
-    (data.type === "expense" || !data.amount.startsWith("-")) &&
+    (["expense", "balance_adjustment"].includes(data.type) ||
+      !data.amount.startsWith("-")) &&
     /[1-9]/.test(data.amount.split(/[eE]/)[0]) &&
     validDate(data.date) &&
     transactionTypes.includes(data.type) &&
     validTransactionId(data.source_wallet_id) &&
-    validTransactionId(data.category_id) &&
+    (data.type === "balance_adjustment"
+      ? data.category_id === null &&
+        data.subcategory_id === null &&
+        data.recurrence === null &&
+        data.recurrence_count === null &&
+        data.date < "9999-12-01"
+      : validTransactionId(data.category_id)) &&
     (data.subcategory_id === null || validTransactionId(data.subcategory_id)) &&
     (data.type === "transfer"
       ? validTransactionId(data.destination_wallet_id) &&
@@ -92,7 +117,7 @@ export function transactionPayload(form) {
   data.recurrence_count = count ? Number(count) : null;
   if (!validTransaction(data)) {
     throw new TransactionInputError(
-      "Enter a nonzero exact expense amount, or a positive income/transfer amount, valid date, wallets, category, and recurrence. Descriptions may contain at most 500 characters.",
+      "Enter a nonzero exact expense/adjustment amount or a positive income/transfer amount, valid date and wallet. Adjustments have no category or recurrence; other types require a category. Descriptions may contain at most 500 characters.",
     );
   }
   return data;
@@ -194,6 +219,15 @@ export function bulkTransactionPayload(form) {
   if ("category_id" in changes && !("subcategory_id" in changes))
     changes.subcategory_id = null;
   if (changes.recurrence === null) changes.recurrence_count = null;
+  if (changes.type === "balance_adjustment") {
+    Object.assign(changes, {
+      category_id: null,
+      subcategory_id: null,
+      destination_wallet_id: null,
+      recurrence: null,
+      recurrence_count: null,
+    });
+  }
   return { ids, changes };
 }
 
@@ -217,11 +251,15 @@ export function transactionDisplayAmount(item) {
   return {
     amount: item.amount.replace(/^[+-]/, ""),
     sign:
-      item.type === "transfer"
-        ? ""
-        : item.type === "income" || refund
-          ? "+"
-          : "-",
+      item.type === "balance_adjustment"
+        ? item.amount.startsWith("-")
+          ? "-"
+          : "+"
+        : item.type === "transfer"
+          ? ""
+          : item.type === "income" || refund
+            ? "+"
+            : "-",
     positive: item.type === "income" || refund,
   };
 }

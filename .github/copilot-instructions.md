@@ -132,13 +132,16 @@ PostgreSQL persistence; database-backed API tests cover persistence and ownershi
   incoming/outgoing transfers. Never persist balances or modify initial amounts
   when saving transactions. Referenced wallets cannot be deleted or change currency.
 - Transaction amounts are nonzero exact decimals: expenses may be negative,
-  income/transfers must remain positive. Negative expenses reduce spending and
+  balance adjustments may be signed; income/transfers must remain positive. Negative expenses reduce spending and
   increase balances; never coerce them into income or use JavaScript money math.
   Income uses income categories; expenses/transfers use expense categories.
   Enforce the generated transaction family FK and kind-scoped CSV resolution.
   Transfers require two different owned wallets with the same currency. Composite foreign keys enforce
   owned wallet/category references and the selected subcategory's parent.
   Referenced categories cannot be deleted (409); never cascade away transactions.
+- Balance adjustments are category-free, nonrecurring signed deltas effective
+  on the first day of the following UTC month. They have no destination and
+  never contribute to income, expenses, transfers, net or spending comparisons.
 - A transaction row defines a single entry or recurring series. Listing projects
   due occurrences through today's UTC date without writes or a scheduler.
   Monthly/yearly repeats are anchored to the original date; edits/deletes affect

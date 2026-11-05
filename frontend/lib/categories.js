@@ -21,6 +21,7 @@ export const categoryKinds = ["expense", "income"];
 
 export function categoriesForType(categories, type) {
   if (!type) return categories;
+  if (type === "balance_adjustment") return [];
   return categories.filter(
     (category) => category.kind === (type === "income" ? "income" : "expense"),
   );

@@ -12,6 +12,7 @@ import {
   MoreHorizontal,
   Pin,
   PinOff,
+  SlidersHorizontal,
 } from "lucide-react";
 import {
   deleteTransactionAction,
@@ -72,6 +73,8 @@ import {
   transactionTypes,
   transactionDateLabel,
   transactionDisplayAmount,
+  transactionTypeLabel,
+  adjustmentEffectiveDate,
 } from "@/lib/transactions";
 
 export function TransactionForm({
@@ -119,6 +122,9 @@ export function TransactionForm({
       [name]: value,
       ...(name === "category_id" ? { subcategory_id: "" } : {}),
       ...(name === "type" ? { category_id: "", subcategory_id: "" } : {}),
+      ...(name === "type" && value === "balance_adjustment"
+        ? { recurrence: "", recurrence_count: "" }
+        : {}),
       ...(name === "type" && value !== "transfer"
         ? { destination_wallet_id: "" }
         : {}),
@@ -243,7 +249,9 @@ export function TransactionForm({
       <div className="grid gap-4 sm:grid-cols-2">
         {input("amount", "Amount", {
           required: true,
-          inputMode: values.type === "expense" ? "text" : "decimal",
+          inputMode: ["expense", "balance_adjustment"].includes(values.type)
+            ? "text"
+            : "decimal",
           placeholder: "12.50",
         })}
         {input("date", "Date", {
@@ -255,7 +263,10 @@ export function TransactionForm({
         {select(
           "type",
           "Type",
-          transactionTypes.map((type) => ({ id: type, name: type })),
+          transactionTypes.map((type) => ({
+            id: type,
+            name: transactionTypeLabel(type),
+          })),
           null,
           true,
         )}
@@ -274,63 +285,83 @@ export function TransactionForm({
             "Choose a destination",
             !bulkIds,
           )}
-        <div className="space-y-2">
-          {select(
-            "category_id",
-            "Main category",
-            bulkIds
-              ? availableCategories.map((category) => ({
-                  ...category,
-                  name: `${category.name} (${category.kind})`,
-                }))
-              : availableCategories,
-            bulkIds
-              ? "Choose a category"
-              : `Choose an ${categoryKind} category`,
-            true,
-          )}
-          <p
-            id={`${prefix}-category-hint`}
-            className="text-sm text-muted-foreground"
-          >
-            {bulkIds && !changed.includes("type") ? (
-              "The category family must match every selected transaction."
-            ) : availableCategories.length ? (
-              `Only ${categoryKind} categories are shown.`
-            ) : (
-              <>
-                No {categoryKind} categories yet.{" "}
-                <Link
-                  href={`/categories?kind=${categoryKind}#${categoryKind}-categories`}
-                  className="underline underline-offset-4"
-                >
-                  Create a category or browse presets
-                </Link>
-                .
-              </>
+        {values.type !== "balance_adjustment" && (
+          <div className="space-y-2">
+            {select(
+              "category_id",
+              "Main category",
+              bulkIds
+                ? availableCategories.map((category) => ({
+                    ...category,
+                    name: `${category.name} (${category.kind})`,
+                  }))
+                : availableCategories,
+              bulkIds
+                ? "Choose a category"
+                : `Choose an ${categoryKind} category`,
+              true,
             )}
-          </p>
-        </div>
-        {select("subcategory_id", "Subcategory", children, "No subcategory")}
-        {select(
-          "recurrence",
-          "Repeat",
-          recurrenceFrequencies.map((frequency) => ({
-            id: frequency,
-            name: frequency,
-          })),
-          "Does not repeat",
+            <p
+              id={`${prefix}-category-hint`}
+              className="text-sm text-muted-foreground"
+            >
+              {bulkIds && !changed.includes("type") ? (
+                "The category family must match every selected transaction."
+              ) : availableCategories.length ? (
+                `Only ${categoryKind} categories are shown.`
+              ) : (
+                <>
+                  No {categoryKind} categories yet.{" "}
+                  <Link
+                    href={`/categories?kind=${categoryKind}#${categoryKind}-categories`}
+                    className="underline underline-offset-4"
+                  >
+                    Create a category or browse presets
+                  </Link>
+                  .
+                </>
+              )}
+            </p>
+          </div>
         )}
-        {(values.recurrence || bulkIds) &&
+        {values.type !== "balance_adjustment" &&
+          select("subcategory_id", "Subcategory", children, "No subcategory")}
+        {values.type !== "balance_adjustment" &&
+          select(
+            "recurrence",
+            "Repeat",
+            recurrenceFrequencies.map((frequency) => ({
+              id: frequency,
+              name: frequency,
+            })),
+            "Does not repeat",
+          )}
+        {values.type !== "balance_adjustment" &&
+          (values.recurrence || bulkIds) &&
           input(
             "recurrence_count",
             "Total occurrences (blank for indefinitely)",
             { type: "number", min: 1, max: 10000, step: 1 },
           )}
       </div>
+      {values.type === "balance_adjustment" && (
+        <>
+          <input type="hidden" name="category_id" value="" />
+          <input type="hidden" name="subcategory_id" value="" />
+          <input type="hidden" name="recurrence" value="" />
+          <input type="hidden" name="recurrence_count" value="" />
+          <p className="text-sm text-muted-foreground">
+            A signed reconciliation only: positive increases and negative
+            decreases the following month&apos;s starting balance. It is
+            excluded from income, expenses and cash flow. No category or
+            recurrence applies.
+          </p>
+        </>
+      )}
       <p className="text-sm text-muted-foreground">
         Expenses may be negative (refunds), but never zero. Income and transfers
-        must be positive.
+        must be positive. Balance adjustments can be positive or negative and
+        take effect on the first day of the following month.
       </p>
       {values.source_wallet_id && (
         <p className="text-sm text-muted-foreground">
@@ -440,11 +471,13 @@ function TransactionEntry({
     else document.getElementById("transactions-heading")?.focus();
   }
   const Icon =
-    item.type === "income"
-      ? ArrowDownLeft
-      : item.type === "expense"
-        ? ArrowUpRight
-        : ArrowLeftRight;
+    item.type === "balance_adjustment"
+      ? SlidersHorizontal
+      : item.type === "income"
+        ? ArrowDownLeft
+        : item.type === "expense"
+          ? ArrowUpRight
+          : ArrowLeftRight;
   return (
     <TableRow
       className="group text-foreground"
@@ -495,7 +528,9 @@ function TransactionEntry({
           {description}
         </Heading>
         <p className="text-xs text-muted-foreground">
-          {item.category_name}
+          {item.type === "balance_adjustment"
+            ? `Opening balance adjustment, effective ${adjustmentEffectiveDate(item.date)}`
+            : item.category_name}
           {item.subcategory_name && ` / ${item.subcategory_name}`}
         </p>
         {item.recurrence && (
@@ -527,11 +562,12 @@ function TransactionEntry({
               income: "bg-income text-income-foreground",
               expense: "bg-expense text-expense-foreground",
               transfer: "bg-transfer text-transfer-foreground",
+              balance_adjustment: "bg-muted text-muted-foreground",
             }[item.type]
           }`}
         >
           <Icon aria-hidden="true" className="size-3.5" />
-          {item.type}
+          {transactionTypeLabel(item.type)}
         </Badge>
       </TableCell>
       <TableCell

@@ -202,6 +202,8 @@ def creation_plan(
         propose(row["source_wallet_id"], "wallet", wallets)
         if (row["type"] or "").casefold() == "transfer":
             propose(row["destination_wallet_id"], "wallet", wallets)
+        if (row["type"] or "").casefold() == "balance_adjustment":
+            continue
         propose(
             row["category_id"],
             "category",
@@ -209,6 +211,8 @@ def creation_plan(
             category_kind="income" if (row["type"] or "").casefold() == "income" else "expense",
         )
     for row in values:
+        if (row["type"] or "").casefold() == "balance_adjustment":
+            continue
         try:
             parent_id = resolve_reference(
                 row["category_id"],
@@ -269,6 +273,8 @@ def validate_import(
             ("destination_wallet_id", wallets),
             ("category_id", categories),
         ]:
+            if field == "category_id" and (values["type"] or "").casefold() == "balance_adjustment":
+                continue
             try:
                 values[field] = resolve_reference(
                     values[field],
@@ -280,14 +286,19 @@ def validate_import(
             except ValueError as exc:
                 errors[field] = str(exc)
                 values[field] = None
-        try:
-            values["subcategory_id"] = resolve_reference(
-                values["subcategory_id"],
-                [item for item in children if str(item["category_id"]) == values["category_id"]],
-            )
-        except ValueError as exc:
-            errors["subcategory_id"] = str(exc)
-            values["subcategory_id"] = None
+        if (values["type"] or "").casefold() != "balance_adjustment":
+            try:
+                values["subcategory_id"] = resolve_reference(
+                    values["subcategory_id"],
+                    [
+                        item
+                        for item in children
+                        if str(item["category_id"]) == values["category_id"]
+                    ],
+                )
+            except ValueError as exc:
+                errors["subcategory_id"] = str(exc)
+                values["subcategory_id"] = None
         if values["type"]:
             values["type"] = values["type"].casefold()
         if values["type"] == "transfer":
@@ -321,7 +332,9 @@ def validate_import(
                 errors["recurrence_count"] = "Use a whole count from 1 to 10000, or leave it blank."
                 values["recurrence_count"] = None
         values["description"] = values["description"] or ""
-        required = ["amount", "date", "type", "source_wallet_id", "category_id"]
+        required = ["amount", "date", "type", "source_wallet_id"]
+        if values["type"] != "balance_adjustment":
+            required.append("category_id")
         if values["type"] == "transfer":
             required.append("destination_wallet_id")
         for field in required:

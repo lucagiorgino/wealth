@@ -5,6 +5,7 @@ export const bulkTransactionTestToken = "bulk-transaction-browser-test-token";
 export const signedExpenseTestToken = "signed-expense-browser-test-token";
 export const summaryTestToken = "summary-browser-test-token";
 export const assetTestToken = "asset-browser-test-token";
+export const adjustmentTestToken = "adjustment-browser-test-token";
 export const refreshTestToken = "refresh-browser-test-token";
 export const settingsTestToken = "settings-browser-test-token";
 export const walletTestOrigin = "http://127.0.0.1:3101";

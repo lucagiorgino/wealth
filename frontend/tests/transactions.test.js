@@ -26,6 +26,7 @@ import {
   transactionSelection,
   transactionDateLabel,
   transactionDisplayAmount,
+  adjustmentEffectiveDate,
 } from "../lib/transactions.js";
 
 const id = "00582a98-a07f-4fdd-8458-54b590b29cd6";
@@ -89,6 +90,84 @@ function form(changes = {}) {
   }
   return result;
 }
+
+test("balance adjustments are signed, category-free, next-month reconciliations", async () => {
+  const adjustment = {
+    ...input,
+    type: "balance_adjustment",
+    category_id: null,
+    amount: "-25.123456789012345678",
+  };
+  assert.deepEqual(transactionPayload(form(adjustment)), adjustment);
+  assert.deepEqual(transactionDisplayAmount(adjustment), {
+    amount: "25.123456789012345678",
+    sign: "-",
+    positive: false,
+  });
+  assert.equal(
+    transactionDisplayAmount({ ...adjustment, amount: "25" }).sign,
+    "+",
+  );
+  assert.equal(adjustmentEffectiveDate("2024-02-29"), "2024-03-01");
+  assert.equal(adjustmentEffectiveDate("2024-12-31"), "2025-01-01");
+  for (const change of [
+    { category_id: id },
+    { recurrence: "monthly" },
+    { destination_wallet_id: destination },
+    { amount: "0" },
+    { date: "9999-12-01" },
+  ])
+    assert.throws(
+      () => transactionPayload(form({ ...adjustment, ...change })),
+      TransactionInputError,
+    );
+
+  const data = form(adjustment);
+  data.append("ids", id);
+  data.append("fields", "type");
+  assert.deepEqual(bulkTransactionPayload(data).changes, {
+    type: "balance_adjustment",
+    category_id: null,
+    subcategory_id: null,
+    destination_wallet_id: null,
+    recurrence: null,
+    recurrence_count: null,
+  });
+  const neutral = {
+    ...occurrence,
+    ...adjustment,
+    category_name: null,
+  };
+  const result = await fetchTransactions(
+    {
+      ...options,
+      fetchImpl: async () =>
+        new Response(
+          JSON.stringify({
+            transactions: [neutral],
+            page: 1,
+            page_size: 10,
+            total: 1,
+            as_of: "2026-01-31",
+            summary: {
+              currencies: [
+                {
+                  currency: "EUR",
+                  income: "0",
+                  expense: "0",
+                  transfer: "0",
+                  net: "0",
+                },
+              ],
+              wallet_expenses: [],
+            },
+          }),
+        ),
+    },
+    { page: 1 },
+  );
+  assert.equal(result.transactions[0].type, "balance_adjustment");
+});
 
 test("bulk changes include only checked fields, preserve exact values and reject invalid selections", () => {
   const data = form();

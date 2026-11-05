@@ -22,3 +22,15 @@ OCCURRENCES = """
         END
     )) AS n
 """
+
+WALLET_MOVEMENTS = """
+    SELECT source_wallet_id AS wallet_id,
+        CASE WHEN type IN ('income', 'balance_adjustment') THEN amount ELSE -amount END AS amount,
+        CASE WHEN type = 'balance_adjustment'
+            THEN (date_trunc('month', occurrence_date) + interval '1 month')::date
+            ELSE occurrence_date END AS movement_date
+    FROM occurrences
+    UNION ALL
+    SELECT destination_wallet_id AS wallet_id, amount, occurrence_date AS movement_date
+    FROM occurrences WHERE type = 'transfer'
+"""

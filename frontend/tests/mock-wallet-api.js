@@ -3,6 +3,7 @@ import { createServer } from "node:http";
 import {
   summaryTestToken,
   assetTestToken,
+  adjustmentTestToken,
   refreshTestToken,
   transactionTestToken,
   bulkTransactionTestToken,
@@ -50,6 +51,7 @@ const transactionStates = new Map(
     bulkTransactionTestToken,
     summaryTestToken,
     assetTestToken,
+    adjustmentTestToken,
     refreshTestToken,
     signedExpenseTestToken,
     settingsTestToken,
@@ -245,10 +247,21 @@ function withBalance(
   const movements = transactions
     .flatMap((item) => projectOccurrences(item, balance_as_of))
     .filter((item) => item.occurrence_date <= balance_as_of)
+    .filter((item) => {
+      if (item.type !== "balance_adjustment") return true;
+      const effective = new Date(`${item.date}T00:00:00Z`);
+      effective.setUTCDate(1);
+      effective.setUTCMonth(effective.getUTCMonth() + 1);
+      return effective.toISOString().slice(0, 10) <= balance_as_of;
+    })
     .flatMap((item) => {
       if (item.destination_wallet_id === wallet.id) return [item.amount];
       if (item.source_wallet_id === wallet.id)
-        return [item.type === "income" ? item.amount : negate(item.amount)];
+        return [
+          ["income", "balance_adjustment"].includes(item.type)
+            ? item.amount
+            : negate(item.amount),
+        ];
       return [];
     });
   return {
@@ -1132,9 +1145,9 @@ const server = createServer(async (request, response) => {
           destination_wallet_name:
             wallets.find((wallet) => wallet.id === item.destination_wallet_id)
               ?.name ?? null,
-          category_name: category.name,
+          category_name: category?.name ?? null,
           subcategory_name:
-            category.subcategories.find(
+            category?.subcategories.find(
               (child) => child.id === item.subcategory_id,
             )?.name ?? null,
         };
@@ -1220,8 +1233,9 @@ const server = createServer(async (request, response) => {
           return (
             !validTransaction(item) ||
             !source ||
-            category?.kind !==
-              (item.type === "income" ? "income" : "expense") ||
+            (item.type !== "balance_adjustment" &&
+              category?.kind !==
+                (item.type === "income" ? "income" : "expense")) ||
             (item.subcategory_id &&
               !category.subcategories.some(
                 (child) => child.id === item.subcategory_id,
@@ -1252,6 +1266,7 @@ const server = createServer(async (request, response) => {
     if (request.method !== "DELETE") {
       data = {
         description: "",
+        category_id: null,
         destination_wallet_id: null,
         subcategory_id: null,
         recurrence: null,
@@ -1270,7 +1285,8 @@ const server = createServer(async (request, response) => {
       if (
         !validTransaction(data) ||
         !source ||
-        root?.kind !== (data.type === "income" ? "income" : "expense") ||
+        (data.type !== "balance_adjustment" &&
+          root?.kind !== (data.type === "income" ? "income" : "expense")) ||
         (data.subcategory_id &&
           !root.subcategories.some(
             (child) => child.id === data.subcategory_id,

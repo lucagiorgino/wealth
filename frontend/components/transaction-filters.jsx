@@ -13,6 +13,7 @@ import {
 import {
   transactionMonthLabel,
   transactionTypes,
+  transactionTypeLabel,
   transactionViewQuery,
 } from "@/lib/transactions";
 
@@ -81,7 +82,7 @@ export function TransactionFilters({
             <NativeSelectOption value="">All types</NativeSelectOption>
             {transactionTypes.map((type) => (
               <NativeSelectOption key={type} value={type}>
-                {type}
+                {transactionTypeLabel(type)}
               </NativeSelectOption>
             ))}
           </NativeSelect>

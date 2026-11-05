@@ -500,7 +500,7 @@ erDiagram
     assets ||--o{ asset_valuations : dated_owned_values
     wallets ||--o{ transactions : source_or_income_receiver
     wallets |o--o{ transactions : transfer_destination
-    categories ||--o{ transactions : categorizes
+    categories |o--o{ transactions : categorizes_except_adjustments
     subcategories |o--o{ transactions : optionally_categorizes
     users {
         text subject PK "Verified Auth0 subject"
@@ -558,13 +558,13 @@ erDiagram
         uuid id PK "Transaction or recurring-series definition UUID"
         text owner_subject FK "Verified subject, cascade on user deletion"
         varchar(500) description "Optional trimmed string, NOT NULL, default empty"
-        numeric amount "Finite nonzero exact decimal, negative only for expenses"
+        numeric amount "Finite nonzero exact decimal, signed for expenses and adjustments"
         date date "Original date, years 0001 through 9999"
-        varchar(8) type "income, expense, or transfer"
+        varchar(18) type "income, expense, transfer, or balance_adjustment"
         uuid source_wallet_id FK "Composite with owner, receiving wallet for income"
         uuid destination_wallet_id FK "Nullable, required only for transfer, distinct source"
-        uuid category_id FK "Owned main category, composite with owner"
-        varchar(7) category_kind FK "Generated from type, composite with category and owner"
+        uuid category_id FK "Owned main category; null only for adjustment"
+        varchar(7) category_kind FK "Generated family; null for adjustment, composite FK"
         uuid subcategory_id FK "Nullable, composite with category and owner"
         varchar(8) recurrence "Nullable, weekly, monthly, or annually"
         integer recurrence_count "Nullable indefinite, otherwise 1 through 10000"
@@ -871,6 +871,36 @@ Maintain this operation index as operations are added:
 [unconfigured setup](#unconfigured-setup).
 
 ### Assets and patrimony
+
+Balance Adjustment is a separate signed transaction type, without category,
+destination or recurrence. It changes only the following month's starting wallet
+balance and is excluded from P&L and spending analyses.
+
+```mermaid
+flowchart LR
+    Form["Signed Balance Adjustment form / CSV"] --> API["Verified-subject transaction API"]
+    API --> DB[("Owned category-free transaction")]
+    DB --> Movement["Shared movement projection: first of following UTC month"]
+    Movement --> Balances["Wallet and patrimony balances"]
+    DB --> PnL["Income/expense/transfer-only P&L sums: adjustment excluded"]
+```
+
+```mermaid
+sequenceDiagram
+    actor User
+    participant Web as Next.js server action
+    participant API as FastAPI
+    participant DB as PostgreSQL
+    User->>Web: Signed adjustment and posting date
+    Web->>Web: Require session; clear category and recurrence
+    Web->>API: POST type balance_adjustment with server-only token
+    API->>DB: Validate owned wallet; insert neutral reconciliation
+    DB-->>API: Commit exact signed amount
+    API-->>Web: 201, private no-store
+    Web->>Web: Revalidate transactions, wallets and Assets after success
+    Note over API,DB: Posting month balance unchanged; following month includes delta
+    Note over API,DB: P&L aggregates exclude adjustment amounts
+```
 
 The private Assets page follows Summary's visual system without importing the
 reference spreadsheet's private data. Existing wallet balances supply Cash.

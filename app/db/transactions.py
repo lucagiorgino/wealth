@@ -31,6 +31,8 @@ class TransactionCategoryMismatch(Exception):
 
 
 async def check_category_kind(connection, subject: str, data: TransactionInput) -> None:
+    if data.type == "balance_adjustment":
+        return
     cursor = await connection.execute(
         "SELECT kind FROM categories WHERE id = %s AND owner_subject = %s FOR KEY SHARE",
         (data.category_id, subject),
@@ -112,7 +114,9 @@ async def save_transaction(
 
 
 async def check_references(connection, subject: str, data: TransactionInput) -> None:
-    references = [("wallets", data.source_wallet_id), ("categories", data.category_id)]
+    references = [("wallets", data.source_wallet_id)]
+    if data.category_id is not None:
+        references.append(("categories", data.category_id))
     if data.destination_wallet_id is not None:
         references.append(("wallets", data.destination_wallet_id))
     for table, item_id in references:
@@ -228,7 +232,7 @@ async def list_transactions(
             JOIN wallets w ON (w.id, w.owner_subject) = (t.source_wallet_id, t.owner_subject)
             LEFT JOIN wallets d
                 ON (d.id, d.owner_subject) = (t.destination_wallet_id, t.owner_subject)
-            JOIN categories c ON (c.id, c.owner_subject) = (t.category_id, t.owner_subject)
+            LEFT JOIN categories c ON (c.id, c.owner_subject) = (t.category_id, t.owner_subject)
             LEFT JOIN subcategories s
                 ON (s.id, s.category_id, s.owner_subject) =
                    (t.subcategory_id, t.category_id, t.owner_subject)

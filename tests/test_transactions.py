@@ -1134,6 +1134,108 @@ def csv_request(data):
     return {**parse_csv(content).model_dump(mode="json"), "defaults": {}, "import_id": str(uuid4())}
 
 
+@pytest.mark.parametrize(
+    "change",
+    [
+        {"category_id": str(uuid4())},
+        {"subcategory_id": str(uuid4())},
+        {"destination_wallet_id": str(uuid4())},
+        {"recurrence": "monthly"},
+        {"recurrence_count": 1},
+        {"amount": "0"},
+        {"amount": 1.2},
+        {"date": "9999-12-01"},
+    ],
+)
+def test_adjustment_rejects_pnl_relationships_and_invalid_amounts(transaction_client, change):
+    client, _ = transaction_client
+    response = client.post(
+        "/api/v1/transactions",
+        json={
+            "type": "balance_adjustment",
+            "amount": "-1.123456789012345678",
+            "date": "2024-01-31",
+            "source_wallet_id": str(uuid4()),
+            **change,
+        },
+    )
+    assert response.status_code == 422
+
+
+@pytest.mark.integration
+def test_adjustments_are_signed_deferred_owned_and_excluded_from_pnl(transaction_database):
+    client, identity, owners, data, _ = transaction_database
+    expense = {**data, "amount": "3", "date": "2024-01-20"}
+    assert client.post("/api/v1/transactions", json=expense).status_code == 201
+    baseline_response = client.get("/api/v1/summary?year=2024")
+    assert baseline_response.status_code == 200
+    baseline = baseline_response.json()
+    adjustment = {
+        "type": "balance_adjustment",
+        "amount": "10.123456789012345678",
+        "date": "2024-01-31",
+        "source_wallet_id": data["source_wallet_id"],
+    }
+    response = client.post("/api/v1/transactions", json=adjustment)
+    assert response.status_code == 201, response.text
+    assert response.json()["category_id"] is None
+    assert (
+        client.post("/api/v1/transactions", json={**adjustment, "amount": "-2"}).status_code == 201
+    )
+    assert client.get("/api/v1/summary?year=2024").json() == baseline
+    listing = client.get("/api/v1/transactions?type=balance_adjustment").json()
+    assert listing["total"] == 2
+    assert all(row["category_name"] is None for row in listing["transactions"])
+    assert listing["summary"]["wallet_expenses"] == []
+    assert listing["summary"]["currencies"] == [
+        {
+            "currency": "EUR",
+            "income": "0",
+            "expense": "0",
+            "transfer": "0",
+            "net": "0",
+        }
+    ]
+
+    from app.db.wallets import wallet_page
+
+    async def balance_at(as_of):
+        async with database_connection() as connection:
+            rows = await wallet_page(connection, owners[0], 1, 10, as_of)
+            return next(item for item in rows if str(item.id) == data["source_wallet_id"])
+
+    before = asyncio.run(balance_at(date(2024, 1, 31)))
+    after = asyncio.run(balance_at(date(2024, 2, 1)))
+    assert after.current_amount - before.current_amount == Decimal("8.123456789012345678")
+    identity["sub"] = owners[1]
+    assert client.post("/api/v1/transactions", json=adjustment).status_code == 404
+    assert client.get(f"/api/v1/transactions/{response.json()['id']}").status_code == 404
+
+
+@pytest.mark.integration
+def test_adjustment_csv_requires_no_category_or_creations(transaction_database):
+    client, _, _, data, _ = transaction_database
+    request = csv_request(data)
+    request["rows"][0]["overrides"] = {
+        "type": "balance_adjustment",
+        "amount": "-2.123456789012345678",
+        "category_id": "",
+        "subcategory_id": "",
+        "recurrence": "",
+        "recurrence_count": "",
+    }
+    path = "/api/v1/transactions/import"
+    report = client.post(path + "/validate", json=request)
+    assert report.status_code == 200
+    assert report.json()["invalid"] == 0, report.text
+    assert report.json()["creations"] == []
+    assert report.json()["rows"][0]["transaction"]["category_id"] is None
+    assert client.post(path + "/confirm", json=request).status_code == 201
+    assert (
+        client.get("/api/v1/transactions").json()["transactions"][0]["type"] == "balance_adjustment"
+    )
+
+
 @pytest.mark.integration
 @pytest.mark.parametrize("description", [None, "", "   "])
 def test_optional_transaction_description_create_edit_and_list(transaction_database, description):

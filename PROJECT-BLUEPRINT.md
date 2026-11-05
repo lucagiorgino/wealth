@@ -63,7 +63,7 @@ without overwriting saved profile preferences. Reads do not provision users.
 
 The authenticated landing dashboard lives at `/dashboard`; `/wallets` owns
 wallet tables, creation, editing, protected deletion, and balances; `/transactions` manages paginated, filterable
-income/expense/transfer transactions, `/categories` manages private categories and
+income/expense/transfer and neutral balance-adjustment transactions, `/categories` manages private categories and
 subcategories, and `/account` manages local profile preferences.
 `/summary` provides annual analysis; `/compare-spending` owns read-only period
 comparisons through a dedicated sidebar entry. `/settings`, opened from the account menu,

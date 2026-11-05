@@ -421,12 +421,12 @@ fully replaces its editable fields using the same closed request body:
 | Field                   | Contract                                                                                                                                  |
 | ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
 | `description`           | Optional trimmed string, at most 500 characters; omitted/blank becomes `""`, explicit null is rejected                                    |
-| `amount`                | Required nonzero finite exact decimal string or integer; expenses may be negative, income/transfers must be positive; no floats, booleans, NaN, or infinity |
+| `amount`                | Required nonzero finite exact decimal string or integer; expenses/adjustments may be negative, income/transfers must be positive; no floats, booleans, NaN, or infinity |
 | `date`                  | Required calendar date `YYYY-MM-DD`, years 0001 through 9999; original start date for recurrence                                          |
-| `type`                  | Required `income`, `expense`, or `transfer`                                                                                               |
+| `type`                  | Required `income`, `expense`, `transfer`, or `balance_adjustment`                                                                          |
 | `source_wallet_id`      | Required owned wallet UUID; the receiving wallet for income                                                                               |
 | `destination_wallet_id` | Required distinct owned wallet UUID for transfers; null/omitted for all other types                                                       |
-| `category_id`           | Required owned main-category UUID, including transfers                                                                                    |
+| `category_id`           | Required owned main-category UUID for income/expenses/transfers; null/omitted for adjustments                                             |
 | `subcategory_id`        | Optional/null owned child UUID belonging to the selected main category                                                                    |
 | `recurrence`            | Optional/null for a single transaction; otherwise `weekly`, `monthly`, or `annually`                                                      |
 | `recurrence_count`      | Optional/null for indefinite recurrence; otherwise an integer from 1 through 10000, including the first occurrence; requires `recurrence` |
@@ -453,6 +453,28 @@ enforces the transaction/category family using a generated `category_kind` and
 composite foreign key. The generated field is not accepted or returned by the API.
 Transfers require matching source/destination currencies, otherwise 422
 `Transfers require wallets with the same currency`. No conversion is performed.
+
+### Balance adjustments
+
+`balance_adjustment` is a signed, nonzero exact delta, not an absolute target
+balance. A positive amount increases and a negative amount decreases the source
+wallet's starting balance on the **first day of the following UTC month**. The
+posting month's closing balance does not include it. For example, an adjustment
+dated January 31 takes effect February 1; December takes effect January 1 of the
+next year. December 9999 is refused because there is no supported following month.
+Wallet initial amounts are never rewritten.
+
+Adjustments require an owned source wallet and no category, subcategory,
+destination, recurrence or recurrence count. They appear in history on their
+posting date with null `category_name` and can be filtered by their dedicated type.
+They are excluded from income, expense, transfer and net sums, wallet expense
+breakdowns, annual cash-flow charts and spending comparisons. An adjustment-only
+history may show currency totals of zero; it never treats the delta as P&L.
+Budgets are not implemented. Editing/deleting an adjustment changes its delta
+in the live projection rather than reclassifying it as income or an expense.
+Bulk conversion must explicitly clear category, subcategory, destination and
+recurrence fields; the frontend does so automatically. Category-free CSV rows
+use type `balance_adjustment`, with those relationship fields blank.
 
 Missing/foreign transaction IDs return the same 404 `Transaction not found`.
 Missing/foreign wallets/categories and wrong-parent subcategories return the
@@ -516,7 +538,7 @@ page size 1 through 100. Optional filters are combined with AND:
 | Query                  | Meaning                                                                                                        |
 | ---------------------- | -------------------------------------------------------------------------------------------------------------- |
 | `q`                    | Case-insensitive literal description substring, trimmed, at most 500 characters; `%` and `_` are not wildcards |
-| `type`                 | `income`, `expense`, or `transfer`                                                                             |
+| `type`                 | `income`, `expense`, `transfer`, or `balance_adjustment`                                                        |
 | `wallet_id`            | Source **or** transfer destination UUID                                                                        |
 | `category_id`          | Main-category UUID                                                                                             |
 | `subcategory_id`       | Subcategory UUID                                                                                               |

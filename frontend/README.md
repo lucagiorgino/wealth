@@ -259,7 +259,7 @@ No time is invented for date-only records. Rows are grouped by their occurrence
 month on the current page, including separate month sections under All dates,
 with pinned occurrences in a leading Pinned section.
 Type badges use semantic light/dark color pairs: green income, red expense, and
-blue transfer. Visible labels and distinct icons retain meaning without color;
+blue transfer, and a neutral Balance Adjustment badge. Visible labels and distinct icons retain meaning without color;
 all three foreground/background pairs meet normal-text contrast requirements.
 Year selection is separate from a January-December rail. Year arrows preserve
 the selected month; the year button opens a focused numeric picker for years
@@ -277,6 +277,11 @@ right-aligned strings with the source wallet's currency symbol beside the
 unrounded amount and a currency-code text alternative. Income/refunds display
 `+`, ordinary expenses `-`, and transfers remain neutral. These signs do not
 change exact stored values or use JavaScript monetary arithmetic.
+Balance Adjustment uses a signed delta, no category or repeat controls, and
+displays its effective date: the first day of the following UTC month. It
+reconciles the next starting balance without contributing to P&L. CSV rows use
+`balance_adjustment` and blank category/recurrence/destination fields. Bulk
+conversion clears those relationships automatically.
 Long descriptions/reference names wrap instead of being truncated. The sticky
 three-dot row menu offers Edit, Pin/Unpin, and Delete. Editing opens the existing focused dialog.
 Descriptions are optional in creation, editing, and CSV imports. Blank or omitted

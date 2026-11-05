@@ -504,11 +504,11 @@ export function NewTransactionDialog({ wallets, categories, today, month }) {
           <DialogHeader>
             <DialogTitle>Add a transaction</DialogTitle>
             <DialogDescription>
-              Record income, an expense, or a transfer, with an optional
-              recurring schedule.
+              Record income, an expense, a transfer, or a Balance Adjustment.
+              Adjustments reconcile the following month without affecting P&L.
             </DialogDescription>
           </DialogHeader>
-          {wallets.length && categories.length ? (
+          {wallets.length ? (
             <TransactionForm
               wallets={wallets}
               categories={categories}

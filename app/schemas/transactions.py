@@ -8,7 +8,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, field_validat
 
 from app.schemas.wallets import WalletAppearance
 
-TransactionType = Literal["income", "expense", "transfer"]
+TransactionType = Literal["income", "expense", "transfer", "balance_adjustment"]
 Recurrence = Literal["weekly", "monthly", "annually"]
 
 
@@ -21,7 +21,7 @@ class TransactionInput(BaseModel):
     date: CalendarDate
     source_wallet_id: UUID
     destination_wallet_id: UUID | None = None
-    category_id: UUID
+    category_id: UUID | None = None
     subcategory_id: UUID | None = None
     recurrence: Recurrence | None = None
     recurrence_count: int | None = Field(default=None, ge=1, le=10000, strict=True)
@@ -36,9 +36,12 @@ class TransactionInput(BaseModel):
     @field_validator("amount")
     @classmethod
     def amount_direction(cls, value: Decimal, info: ValidationInfo) -> Decimal:
-        if value == 0 or (value < 0 and info.data.get("type") != "expense"):
+        if value == 0 or (
+            value < 0 and info.data.get("type") not in ("expense", "balance_adjustment")
+        ):
             raise ValueError(
-                "Expenses require a nonzero amount; income and transfers require positive amounts"
+                "Expenses and adjustments require a nonzero amount; "
+                "income and transfers require positive amounts"
             )
         return value
 
@@ -56,6 +59,21 @@ class TransactionInput(BaseModel):
 
     @model_validator(mode="after")
     def consistent_relationships(self) -> Self:
+        if self.type == "balance_adjustment":
+            if any(
+                value is not None
+                for value in (
+                    self.category_id,
+                    self.subcategory_id,
+                    self.recurrence,
+                    self.recurrence_count,
+                )
+            ):
+                raise ValueError("Balance adjustments have no category or recurrence")
+            if self.date >= CalendarDate(9999, 12, 1):
+                raise ValueError("The following month must be within years 0001 through 9999")
+        elif self.category_id is None:
+            raise ValueError("Income, expenses and transfers require a category")
         if self.type == "transfer":
             if self.destination_wallet_id is None:
                 raise ValueError("Transfers require a destination wallet")
@@ -79,7 +97,7 @@ class TransactionOccurrence(Transaction):
     occurrence_number: int
     source_wallet_name: str
     destination_wallet_name: str | None
-    category_name: str
+    category_name: str | None
     subcategory_name: str | None
     currency: str
 
@@ -185,7 +203,13 @@ class TransactionChanges(BaseModel):
     def meaningful_changes(self) -> Self:
         if not self.model_fields_set:
             raise ValueError("Choose at least one field to change")
-        nullable = {"destination_wallet_id", "subcategory_id", "recurrence", "recurrence_count"}
+        nullable = {
+            "destination_wallet_id",
+            "category_id",
+            "subcategory_id",
+            "recurrence",
+            "recurrence_count",
+        }
         if any(
             getattr(self, field) is None for field in self.model_fields_set.difference(nullable)
         ):

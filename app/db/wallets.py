@@ -1,7 +1,7 @@
 from datetime import date
 from uuid import UUID
 
-from app.db.occurrences import OCCURRENCES
+from app.db.occurrences import OCCURRENCES, WALLET_MOVEMENTS
 from app.db.postgres import database_connection
 from app.schemas.wallets import Wallet, WalletCreate, WalletList
 from app.services.wallet_icons import InvalidWalletIcon
@@ -46,22 +46,16 @@ async def wallet_page(
             SELECT t.* FROM transactions t WHERE t.owner_subject = %s
             AND (t.source_wallet_id IN (SELECT id FROM selected_wallets)
                  OR t.destination_wallet_id IN (SELECT id FROM selected_wallets))
-        ), occurrences AS ({OCCURRENCES}), movements AS (
-            SELECT source_wallet_id AS wallet_id,
-                CASE WHEN type = 'income' THEN amount ELSE -amount END AS amount
-            FROM occurrences WHERE occurrence_date <= %s
-            UNION ALL
-            SELECT destination_wallet_id AS wallet_id, amount
-            FROM occurrences WHERE type = 'transfer' AND occurrence_date <= %s
-        ), totals AS (
-            SELECT wallet_id, sum(amount) AS amount FROM movements GROUP BY wallet_id
+        ), occurrences AS ({OCCURRENCES}), movements AS ({WALLET_MOVEMENTS}), totals AS (
+            SELECT wallet_id, sum(amount) AS amount FROM movements
+            WHERE movement_date <= %s GROUP BY wallet_id
         )
         SELECT w.*, w.initial_amount + COALESCE(t.amount, 0) AS current_amount,
             %s::date AS balance_as_of
         FROM selected_wallets w LEFT JOIN totals t ON t.wallet_id = w.id
         ORDER BY w.created_at, w.id
         """,
-        (subject, wallet_id, wallet_id, page_size, (page - 1) * page_size, subject, *(as_of,) * 7),
+        (subject, wallet_id, wallet_id, page_size, (page - 1) * page_size, subject, *(as_of,) * 6),
     )
     return [Wallet.model_validate(row) for row in await cursor.fetchall()]
 

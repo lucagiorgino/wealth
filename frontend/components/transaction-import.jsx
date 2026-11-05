@@ -224,7 +224,9 @@ function ImportWizard({ wallets, categories, onComplete, onDiscard, onBusy }) {
             values apply only to unmapped or blank cells. Names must uniquely
             match existing records or be approved for creation. UUIDs also work.
             Currency markers and dates are normalized without converting
-            currencies.
+            currencies. Income, expenses and transfers require a main category.
+            Balance Adjustment rows use type balance_adjustment and must leave
+            categories, destination and recurrence blank.
           </p>
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">

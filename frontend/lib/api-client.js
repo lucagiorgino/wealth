@@ -505,8 +505,10 @@ function validateTransaction(item, occurrence = false) {
         typeof item.source_wallet_name !== "string" ||
         !item.source_wallet_name.trim() ||
         !walletCurrencies.includes(item.currency) ||
-        typeof item.category_name !== "string" ||
-        !item.category_name.trim() ||
+        (item.type === "balance_adjustment"
+          ? item.category_name !== null
+          : typeof item.category_name !== "string" ||
+            !item.category_name.trim()) ||
         (item.destination_wallet_id === null
           ? item.destination_wallet_name !== null
           : typeof item.destination_wallet_name !== "string" ||
