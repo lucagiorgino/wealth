@@ -14,6 +14,9 @@ test("Assets keeps Summary charts aligned, shows exact patrimony and preserves f
   await page.emulateMedia({ reducedMotion: "reduce" });
   const headers = { Authorization: `Bearer ${assetTestToken}` };
   const api = "http://127.0.0.1:3102";
+  const today = new Date().toISOString().slice(0, 10);
+  const currentYear = Number(today.slice(0, 4));
+  const currentMonth = Number(today.slice(5, 7)) - 1;
   const post = async (path, data) => {
     const response = await request.post(`${api}/api/v1/${path}`, {
       headers,
@@ -123,13 +126,37 @@ test("Assets keeps Summary charts aligned, shows exact patrimony and preserves f
   await expect(row("Index fund")).toHaveCount(0);
   await page.getByRole("button", { name: "Show holdings" }).click();
   await expect(row("Index fund")).toBeVisible();
+  const historical = await (
+    await request.get(`${api}/api/v1/assets?year=2024`, { headers })
+  ).json();
+  const fund = historical.currencies[0].groups.find(
+    (group) => group.key === "stocks",
+  ).holdings[0];
+  await request.put(`${api}/api/v1/assets/${fund.id}/valuations`, {
+    headers,
+    data: { date: "2024-01-31", amount: "9999" },
+  });
+  await page.reload();
+  await expect(row("Index fund").getByRole("cell").nth(0)).toContainText(
+    "2000",
+  );
+  await request.delete(`${api}/api/v1/assets/${fund.id}`, { headers });
+  await page.reload();
+  await expect(row("Index fund")).toContainText(
+    "Closed holding: frozen history",
+  );
+  await expect(row("Index fund").getByRole("cell").nth(0)).toContainText(
+    "2000",
+  );
+  await expect(row("Index fund").getByRole("button")).toHaveCount(0);
+  await page.goto(`/assets?year=${currentYear}`);
   await page.getByRole("button", { name: "Add asset", exact: true }).click();
   const dialog = page.getByRole("dialog", {
     name: "Add an asset or liability",
   });
   await dialog.getByLabel("Name", { exact: true }).fill("Property");
   await dialog.getByLabel("Asset group").selectOption("other");
-  await dialog.getByLabel("Valuation date").fill("2024-01-15");
+  await dialog.getByLabel("Valuation date").fill(`${today.slice(0, 7)}-01`);
   await dialog
     .getByLabel("Value (EUR)", { exact: true })
     .fill("10000.000000000000000001");
@@ -146,9 +173,9 @@ test("Assets keeps Summary charts aligned, shows exact patrimony and preserves f
   );
   await dialog.getByRole("button", { name: "Add asset", exact: true }).click();
   await expect(dialog).not.toBeVisible();
-  await expect(row("Property").getByRole("cell").nth(0)).toContainText(
-    "10000.000000000000000001",
-  );
+  await expect(
+    row("Property").getByRole("cell").nth(currentMonth),
+  ).toContainText("10000.000000000000000001");
   await page
     .getByRole("button", { name: "Record valuation for Property", exact: true })
     .click();
@@ -156,20 +183,39 @@ test("Assets keeps Summary charts aligned, shows exact patrimony and preserves f
     name: "Value Property",
     exact: true,
   });
-  await valuation.getByLabel("Valuation date").fill("2024-02-29");
+  await valuation.getByLabel("Valuation date").fill(today);
   await valuation.getByLabel("Value (EUR)", { exact: true }).fill("10100.25");
   await valuation.getByRole("button", { name: "Save valuation" }).click();
   await expect(valuation).not.toBeVisible();
-  await expect(row("Property").getByRole("cell").nth(1)).toContainText(
-    "10100.25",
-  );
-  await expect(row("Property").getByRole("cell").last()).toContainText(
-    "10100.25",
-  );
+  await expect(
+    row("Property").getByRole("cell").nth(currentMonth),
+  ).toContainText("10100.25");
+  await expect(
+    row("Property").getByRole("cell").nth(currentMonth),
+  ).toContainText("10100.25");
   await page.reload();
-  await expect(row("Property").getByRole("cell").last()).toContainText(
-    "10100.25",
-  );
+  await expect(
+    row("Property").getByRole("cell").nth(currentMonth),
+  ).toContainText("10100.25");
+  const cash = (
+    await (await request.get(`${api}/api/v1/wallets`, { headers })).json()
+  ).wallets[0];
+  const spending = await post("categories", {
+    name: "Live spending",
+    colour: "#123abc",
+    icon: "house",
+  });
+  await post("transactions", {
+    type: "expense",
+    amount: "5",
+    date: today,
+    source_wallet_id: cash.id,
+    category_id: spending.id,
+  });
+  await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+  await expect(
+    row("Everyday cash").getByRole("cell").nth(currentMonth),
+  ).toContainText("995");
 
   await page.setViewportSize({ width: 375, height: 900 });
   expect(
@@ -201,7 +247,9 @@ test("Assets keeps Summary charts aligned, shows exact patrimony and preserves f
   await expect(deletion).not.toBeVisible();
   await expect(row("Property")).toHaveCount(0);
 
-  await page.getByRole("button", { name: "Choose assets year, 2024" }).click();
+  await page
+    .getByRole("button", { name: `Choose assets year, ${currentYear}` })
+    .click();
   const yearForm = page.getByRole("form", {
     name: "Choose assets year",
     exact: true,

@@ -3,7 +3,7 @@ from datetime import UTC, datetime
 from pydantic import ValidationError
 
 from app.db import transactions
-from app.db.postgres import database_connection
+from app.db.asset_snapshots import financial_connection
 from app.schemas.transactions import (
     TransactionBulkResult,
     TransactionBulkUpdate,
@@ -24,7 +24,7 @@ async def list_transactions(subject: str, filters: TransactionFilters) -> Transa
 async def update_transactions(subject: str, data: TransactionBulkUpdate) -> TransactionBulkResult:
     changes = data.changes.model_dump(exclude_unset=True)
     pinned = changes.pop("is_pinned", None)
-    async with database_connection() as connection:
+    async with financial_connection(subject) as connection:
         rows = await transactions.lock_transactions(connection, subject, data.ids)
         if changes:
             try:

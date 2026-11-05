@@ -354,7 +354,8 @@ export function TransactionForm({
             A signed reconciliation only: positive increases and negative
             decreases the following month&apos;s starting balance. It is
             excluded from income, expenses and cash flow. No category or
-            recurrence applies.
+            recurrence applies. Frozen closes never change; use a new adjustment
+            to reconcile a later opening.
           </p>
         </>
       )}
@@ -573,7 +574,9 @@ function TransactionEntry({
       <TableCell
         className={`px-3 py-3 text-right font-semibold whitespace-normal tabular-nums [overflow-wrap:anywhere] ${display.positive ? "text-primary-ink" : ""}`}
       >
-        <span className="sr-only">Amount ({item.type}) </span>
+        <span className="sr-only">
+          Amount ({transactionTypeLabel(item.type)}){" "}
+        </span>
         <span>{display.sign}</span>
         <MoneyAmount amount={display.amount} currency={item.currency} />
       </TableCell>

@@ -43,7 +43,7 @@ const summary = {
           key: "stocks",
           label: "Stocks / ETF",
           values,
-          holdings: [{ ...position, source: "asset", values }],
+          holdings: [{ ...position, source: "asset", active: true, values }],
         },
       ],
       trend: Array.from({ length: 12 }, (_, i) => ({
@@ -159,6 +159,9 @@ test("asset report transport preserves exact strings, nulls and server geometry 
     },
     (data) => {
       data.currencies[0].groups[0].holdings[0].currency = "USD";
+    },
+    (data) => {
+      data.currencies[0].groups[0].holdings[0].active = "true";
     },
     (data) => {
       data.currencies[0].missing_values[0] = -1;

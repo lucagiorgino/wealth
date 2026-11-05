@@ -28,13 +28,14 @@ from app.db.transactions import (
     TransferCurrencyMismatch,
 )
 from app.db.wallets import WalletCurrencyInUse, WalletInUse, WalletNotFound
+from app.services.asset_snapshots import snapshot_lifespan
 from app.services.profile_images import InvalidProfileImage
 from app.services.summary import InvalidExpenseComparison
 from app.services.transaction_imports import InvalidTransactionCSV, InvalidTransactionImport
 from app.services.transactions import InvalidBulkTransactionChange
 from app.services.wallet_icons import InvalidWalletIcon, WalletIconUnavailable
 
-app = FastAPI(title="Wealth", version="0.1.0")
+app = FastAPI(title="Wealth", version="0.1.0", lifespan=snapshot_lifespan)
 app.include_router(health_router)
 app.include_router(identity_router)
 app.include_router(account_router)

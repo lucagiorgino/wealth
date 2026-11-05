@@ -30,7 +30,8 @@
 | Private annual expense/income analysis, monthly/yearly category/subcategory tables, grouped monthly bars and diverging net bars | `app/api/summary.py`, `app/services/summary.py`, `app/db/summary.py`, `app/schemas/summary.py`, `/summary`, `expense-summary.jsx`, `expense-charts.jsx`; database, adapter and browser tests |
 | Shadcn category-ranking/monthly-trend charts and 2–6-period month/year/yearly-range-average comparisons | `app/db/expense_comparisons.py`, Summary schemas/services/routes, `expense-charts.jsx`, `expense-comparison.jsx`, registry Chart/Recharts; exact geometry/rounding, private transport, and browser comparison tests |
 | Dedicated Compare spending page and reorderable sixth sidebar entry | `/compare-spending`, independently authenticated page/action, migration `014_comparison_navigation.sql`; saved-order migration, settings, private-route and responsive comparison browser tests |
-| Annual per-currency patrimony, reconstructed wallet cash, manual asset/liability valuations, Summary-consistent charts and seventh navigation feature | `app/api/assets.py`, `app/db/assets.py`, `app/services/assets.py`, `015_assets.sql`, `/assets`, `asset-*.jsx`; `tests/test_assets.py`, frontend adapter and authenticated browser tests |
+| Annual per-currency patrimony, live/frozen wallet cash, manual asset/liability valuations, Summary-consistent charts and seventh navigation feature | `app/api/assets.py`, `app/db/assets.py`, `app/services/assets.py`, `015_assets.sql`, `/assets`, `asset-*.jsx`; `tests/test_assets.py`, frontend adapter and authenticated browser tests |
+| Neutral signed Balance Adjustment and immutable automated UTC month-end closure with live current-month refresh | Migrations 016–017, shared movement projection, `app/db/asset_snapshots.py`, lifespan worker, transaction/CSV UI; PostgreSQL boundary/concurrency/deletion/currency/lifecycle tests and authenticated browser workflows |
 | Server-side SDK token renewal, rotated-cookie persistence, safe reauthentication and retryable provider failures | `frontend/lib/auth0.js`, `auth-errors.js`, `api.js`, `proxy.js`; typed-error unit tests and synthetic-provider `token-refresh.spec.js` |
 | Reviewed CSV transaction import with mapping, approved missing-record creation, exact amount/date normalization, row corrections/exclusion, and atomic safe-retry confirmation | `app/services/transaction_imports.py`, `app/services/import_formats.py`, `app/db/transaction_imports.py`, `006_transaction_imports.sql`, import dialog/actions; API/database, adapter, and CSV browser tests |
 | API token origin/cache/response boundaries                                                                                     | `frontend/tests/config.test.js`, `frontend/tests/api-client.test.js`                                                                                                                                    |
@@ -47,17 +48,22 @@ automated bootstrap checks do not prove a live end-to-end provider login.
 
 ## Verification scope
 
-Assets passed all 434 backend tests against isolated PostgreSQL, all 67 frontend
-unit tests, backend/frontend lint and formatting, a production SSR build, and six
-focused Chromium workflows. Coverage includes exact reconstructed cash/recurrence/
+Balance updates passed backend tests against isolated PostgreSQL, all 68 frontend
+unit tests, backend/frontend lint and formatting, a production SSR build, and eight
+focused Chromium workflows. Coverage includes exact cash/recurrence/
 transfer/refund handling, owner isolation, nonprovisioning reads, valuation upserts,
 zero/missing/future values, undefined percentages, composite ownership constraints,
-order-preserving navigation migration, retained failed-save edits, confirmed history
-deletion, shared year navigation, aligned chart headers/plots, colored exact tooltips,
+order-preserving navigation migration, retained failed-save edits, preserved frozen
+history after deletion, shared year navigation, aligned chart headers/plots, colored exact tooltips,
 bar/line/donut switching, authentication and explicit read failures.
 Responsive/dark navigation checks include Assets at 320–1440 pixels; populated
 desktop and mobile/dark screenshots were inspected. Browser tests use synthetic
 sessions and a mock API; PostgreSQL tests establish real persistence and ownership.
+Snapshot checks cover concurrent/idempotent UTC closure, December/January rollover,
+pre-mutation downtime catch-up, currency changes, late-source coverage, immutable
+updates, next-month signed adjustments, P&L exclusion, worker outage retry and
+shutdown cleanup. Browser checks cover closed-source controls, preserved failed-save
+form edits and visible-page refresh after an external transaction.
 
 The compact transaction list, bulk actions and persistent pins passed 257
 database-backed transaction/wallet tests, all 64 frontend unit tests, all 24
@@ -497,6 +503,8 @@ erDiagram
     users ||--o{ transactions : owns
     users ||--o{ transaction_imports : confirmed_import_receipts
     users ||--o{ assets : owns
+    users ||--o| asset_snapshot_state : month_closure_cursor
+    users ||--o{ asset_balance_snapshots : frozen_owned_balances
     assets ||--o{ asset_valuations : dated_owned_values
     wallets ||--o{ transactions : source_or_income_receiver
     wallets |o--o{ transactions : transfer_destination
@@ -534,6 +542,23 @@ erDiagram
         text owner_subject FK "Paired with asset_id"
         date date PK "Dated snapshot, API refuses future dates"
         numeric amount "Finite nonnegative exact total value"
+    }
+    asset_snapshot_state {
+        text owner_subject PK, FK "References users.subject; cascade on user deletion"
+        date started_month "First UTC month in seeded history, day 1"
+        date through_month "Nullable until closed; latest sealed month, day 1"
+        timestamptz created_at "Default now"
+    }
+    asset_balance_snapshots {
+        text owner_subject PK, FK "References users.subject; cascade on user deletion"
+        text source PK "wallet or asset"
+        uuid source_id PK "Logical source UUID; deliberately no live-source FK"
+        text currency PK "Supported wallet currency allowlist"
+        date month PK "Sealed UTC month, day 1"
+        text name "Frozen nonblank name, 1 through 100 characters"
+        text asset_group "cash for wallets; supported holding group"
+        numeric amount "Finite signed cash or nullable nonnegative manual value"
+        timestamptz captured_at "Default clock_timestamp; UPDATE refused by trigger"
     }
     categories {
         uuid id PK "Generated UUID, also composite unique with owner"
@@ -645,7 +670,8 @@ original date and clamp shorter months without drifting. A finite count includes
 the first occurrence, while null means indefinitely. Edits/deletes target the
 entire definition/series, including history, and are explicitly labeled.
 Occurrences have no separate table and need no scheduler. Wallet initial amounts
-remain unchanged by transaction writes. Balances are calculated, not stored;
+remain unchanged by transaction writes. Live balances are calculated; completed
+monthly closes are stored immutably and carried into the next month;
 manual assets use separate dated valuations. Referenced wallets cannot be deleted or
 change currency. Transfer currencies are checked under shared wallet locks.
 Keep this Mermaid ER diagram synchronized with actual migrations.
@@ -911,10 +937,19 @@ liabilities, not a sum of month snapshots. Missing valuations warn that totals
 include recorded values only; incomplete adjacent months and zero denominators
 do not manufacture growth rates. Percentage ratios round once half-up to 18 places.
 
-Wallet history is reconstructed from current initial amounts and owned due
-occurrences, not persisted balances or an immutable ledger. Backdated valuations
-and wallet/series edits change history. Valuation deletion is currently whole-holding
-only, behind explicit confirmation. No provider integration, quote/quantity model,
+Completed UTC months are immutable persisted closes. Current wallet cash carries
+the prior close plus this month's effective movements; new sources/currencies
+start from their initial amount plus this month's movements. Initial history is
+seeded once from currently available records and cannot recover edits/deletions
+before activation. Late holdings do not enter sealed months or change their
+missing-coverage counts. Historical deleted holdings and old currencies stay
+visible without mutation controls. Valuation deletion is whole-holding only,
+behind explicit confirmation, preserving frozen balances.
+An API lifespan worker checks closure every 60 seconds. Reads and financial
+writes catch up under its owner advisory lock; closure precedes mutation in the
+same transaction. Multiple workers are idempotent, outages are explicit, and
+shutdown cancels/awaits the worker. Current-year SSR refreshes every 30 seconds
+while visible/on return, skipping open forms. No provider integration, quote/quantity model,
 currency conversion, forecast or metadata editing is implemented.
 See [the API contract](API.md#assets-and-patrimony) for complete semantics.
 
@@ -925,11 +960,15 @@ flowchart LR
     Page --> Table["Per-currency expandable January-December table and exact totals; no Opening or Latest columns"]
     Forms["Session-checked asset/valuation actions"] --> API
     API --> Report["Patrimony service: fixed UTC checkpoints and exact arithmetic"]
-    Report --> Query["One owned read-only snapshot"]
+    Report --> Lock["Owner advisory lock; transactional pending month closure"]
+    Lock --> Query["Owned frozen history plus live current month"]
     Query --> Projection["Shared anchored transaction occurrence projection"]
-    Query --> DB[("PostgreSQL: wallets, transactions, assets, asset_valuations")]
+    Query --> DB[("PostgreSQL: wallet/transaction/valuation definitions, closure cursor and immutable balances")]
+    Worker["FastAPI lifespan worker, 60-second checks and downtime catch-up"] --> Lock
+    Page --> Refresh["30-second visible/focus SSR refresh; skip open forms"]
     API --> Writes["Owned holding creation/deletion and date-value upserts"]
-    Writes --> DB
+    Writes --> Lock
+    Lock --> DB
     Report -->|"Decimal strings, missing coverage, monetary ticks and dimensionless geometry"| Page
 ```
 
@@ -944,7 +983,8 @@ sequenceDiagram
     Web->>Web: Require session independently
     Web->>API: GET /api/v1/assets?year=N (server-only bearer, no-store)
     API->>Service: Verified owner, year, fixed UTC date
-    Service->>DB: Read-only owned wallet/occurrence and latest valuation snapshot at 13 checkpoints
+    Service->>DB: Lock owner; seed initial history or close pending completed UTC months
+    Service->>DB: Read immutable historical values and current live movements/valuations
     DB-->>Service: Exact numeric values or unknowns
     Service-->>API: Per-currency totals, signed geometry, missing coverage and once-rounded changes
     API-->>Web: Private no-store response
@@ -952,7 +992,7 @@ sequenceDiagram
     User->>Web: Add holding or save dated total valuation
     Web->>Web: Independently require session and validate input
     Web->>API: POST asset / PUT owned asset valuation
-    API->>DB: Transaction: provision only if creating, owned lock, insert/upsert valuation
+    API->>DB: Transaction: owner lock, pending closure, owned holding insert/upsert
     alt Successful write
         DB-->>API: Commit
         API-->>Web: 201 or 204
@@ -965,8 +1005,28 @@ sequenceDiagram
     User->>Web: Confirm deletion of holding and all valuations
     Web->>API: Independently authenticated DELETE asset
     API->>DB: Delete WHERE owner = verified sub; cascade only its valuations
+    Note over API,DB: Frozen balances survive; historical holding becomes inactive
     API-->>Web: 204 (foreign/missing: 404)
     Web->>Web: Revalidate Assets after success
+```
+
+```mermaid
+sequenceDiagram
+    participant Worker as API lifespan worker (60-second checks)
+    participant Write as Financial mutation / Assets read
+    participant DB as PostgreSQL
+    Worker->>DB: Lock owner; detect completed UTC months
+    DB-->>Worker: Last sealed month
+    loop Each pending month, oldest first
+        Worker->>DB: Previous close + effective owned due movements; latest manual valuation
+        Worker->>DB: Insert immutable balance rows; advance closure cursor
+    end
+    Worker->>DB: Commit; release owner lock
+    Write->>DB: Acquire same owner lock
+    Write->>DB: Catch up pending closure before editing definitions
+    Write->>DB: Commit mutation and catch-up atomically
+    Note over Worker,DB: Initial history reconstructed once; no overwrite on later closes
+    Note over Worker,DB: Downtime catches up; unavailable DB logs retry and API returns 503
 ```
 
 ### Live development

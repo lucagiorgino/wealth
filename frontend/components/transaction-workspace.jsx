@@ -56,6 +56,7 @@ import {
   transactionPeriodQuery,
   transactionViewQuery,
   transactionYearMonth,
+  transactionTypeLabel,
   TransactionInputError,
 } from "@/lib/transactions";
 
@@ -322,7 +323,7 @@ export function TransactionToolbar({
         >
           {[
             filters.q && `Search: ${filters.q}`,
-            filters.type && `Type: ${filters.type}`,
+            filters.type && `Type: ${transactionTypeLabel(filters.type)}`,
             filters.wallet_id &&
               `Wallet: ${wallets.find((item) => item.id === filters.wallet_id)?.name ?? "selected wallet"}`,
             filters.category_id &&

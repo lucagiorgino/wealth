@@ -51,13 +51,25 @@ async def asset_summary(subject: str, year: int, as_of: date | None = None) -> A
         else min(cutoff, as_of)
         for i, cutoff in enumerate(checkpoints)
     ]
-    rows = await annual_holdings(subject, checkpoints, min(as_of, date(year, 12, 31)))
+    rows, available = await annual_holdings(subject, checkpoints, as_of)
     holdings = {}
     for row in rows:
-        key = (row["source"], row["id"])
+        key = (row["source"], row["id"], row["currency"])
         if key not in holdings:
-            holdings[key] = {**row, "amounts": [None] * 13}
+            holdings[key] = {**row, "amounts": [None] * 13, "present": [False] * 13}
         holdings[key]["amounts"][row["period"]] = row["amount"]
+        holdings[key]["present"][row["period"]] = available[row["period"]]
+        holdings[key]["name"] = row["name"]
+        holdings[key]["active"] = row["active"]
+    for item in holdings.values():
+        for i, cutoff in enumerate(checkpoints):
+            if (
+                cutoff is not None
+                and available[i]
+                and cutoff.replace(day=1) == as_of.replace(day=1)
+                and not item["present"][i]
+            ):
+                item["amounts"][i] = Decimal(0)
     latest = max((i for i, cutoff in enumerate(checkpoints) if cutoff is not None), default=0)
 
     def values(amounts: list[Decimal | None]) -> AssetValues:
@@ -65,12 +77,15 @@ async def asset_summary(subject: str, year: int, as_of: date | None = None) -> A
 
     currencies = []
     for currency in sorted({row["currency"] for row in rows}):
-        selected = [item for item in holdings.values() if item["currency"] == currency]
+        selected = sorted(
+            (item for item in holdings.values() if item["currency"] == currency),
+            key=lambda item: (item["name"], item["source"], str(item["id"])),
+        )
 
         def totals(items: list[dict]) -> list[Decimal | None]:
             return [
                 exact_sum([item["amounts"][i] for item in items if item["amounts"][i] is not None])
-                if cutoff is not None
+                if available[i]
                 else None
                 for i, cutoff in enumerate(checkpoints)
             ]
@@ -97,7 +112,9 @@ async def asset_summary(subject: str, year: int, as_of: date | None = None) -> A
             for asset, liability in zip(assets, liabilities, strict=True)
         ]
         missing = [
-            sum(item["amounts"][i] is None for item in selected) if cutoff is not None else 0
+            sum(item["present"][i] and item["amounts"][i] is None for item in selected)
+            if available[i]
+            else 0
             for i, cutoff in enumerate(checkpoints)
         ]
         change, percent = [None] * 13, [None] * 13

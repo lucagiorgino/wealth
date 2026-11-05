@@ -17,7 +17,8 @@ diagrams](docs/IMPLEMENTATION_STATUS.md) for the implemented scope.
   `app/core/`, and PostgreSQL connectivity in `app/db/`.
 - **PostgreSQL** stores users (verified external subjects and local profile
   preferences), their wallets, private categories/subcategories, and transaction
-  definitions (including recurring series), assets, and dated asset valuations.
+  definitions (including recurring series), assets, dated asset valuations,
+  month-end closure cursors and immutable balance snapshots.
   `app/db/wallets.py` owns parameterized, owner-scoped queries.
   `app/schemas/wallets.py` owns closed request schemas and response models.
   `app/db/migrate.py` applies numbered SQL migrations in a transaction under a
@@ -139,18 +140,28 @@ preferences. No browser storage or direct frontend database access is added.
 
 `/assets` shares Summary's year selector, compact aligned chart cards, title-right
 view toggles, exact colored tooltips and grouped horizontal-scroll tables.
-Python reconstructs wallet cash at the prior year-end and each available month-end
-from current initial amounts and due occurrences. The current month stops today UTC.
+Python freezes completed UTC months in owner-scoped persisted snapshots.
+Current cash uses the previous close plus this month's due movements, stopping
+today UTC. Signed Balance Adjustments affect the following month's opening only,
+never P&L.
 Separate owner-scoped manual holdings store dated nonnegative valuations; the last
 known valuation carries forward. Liabilities subtract from net worth.
-This is reconstructed history, not an immutable ledger or a market-data feed.
-Wallet/series edits and backdated valuations intentionally change historical views.
+Initial history is seeded once from available definitions; it is not an audit of
+edits/deletions before activation. Later wallet/series edits and backdated
+valuations never overwrite frozen monthly views. No market-data feed is implemented.
 
 Migration 015 adds `assets` and `asset_valuations`; their composite ownership key
 prevents cross-owner valuations. Creation atomically provisions an absent user,
 holding and first valuation. Reads never provision users. Subsequent valuation
 saves upsert one owned holding/date; confirmed holding deletion removes all its
-valuation history, not wallets or transactions. No metadata editing, automated
+valuation history, not frozen balances, wallets or transactions. Migration 017
+adds the closure cursor and immutable month-end snapshots. A FastAPI lifespan
+worker closes completed months every 60 seconds and catches up after downtime.
+Reads and financial writes share its owner advisory lock; pending closure precedes
+mutations transactionally. Frozen source identifiers deliberately have no live
+wallet/asset FK, preserving deleted holdings and old currencies as inactive rows.
+Current-year Assets refreshes every 30 seconds while visible and on return,
+without losing form edits or refreshing open dialogs. No metadata editing, automated
 quotes, quantities, screenshots imports or currency conversion is implemented.
 
 Reports retain currencies separately, expose missing coverage and future nulls,
@@ -209,12 +220,15 @@ zero. Negative amounts are accepted. Names need not be unique.
 
 Amounts travel as decimal strings (or integer JSON inputs), never floating-point
 JSON inputs or JavaScript `Number` conversions. No currency rounding or conversion
-is performed. Current amounts are computed in a read-only owner-scoped snapshot:
-initial amount plus due income minus due expenses, plus incoming transfers minus
-outgoing transfers. The UTC horizon and anchored occurrence SQL are shared with
+is performed. Current amounts carry the previous frozen close plus current-month
+due income minus expenses, incoming minus outgoing transfers and effective
+neutral adjustments. New sources start from their initial amount; initial history
+uses the legacy cumulative projection once at activation.
+The UTC horizon and anchored occurrence SQL are shared with
 transaction history; even the first future entry is excluded from balances.
 Only the requested wallet page's related definitions are projected.
-Balances are never stored. Initial amounts change only through explicit wallet edits.
+Live balances are never stored; immutable month-end closes are. Initial amounts
+change only through explicit wallet edits and never replace a frozen opening.
 Owned wallet updates/deletes lock the row and refuse foreign/missing IDs identically.
 Referenced wallets refuse deletion and currency changes without removing history.
 Same-currency transfer writes and import confirmation share-lock wallet currencies

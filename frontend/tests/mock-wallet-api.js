@@ -106,6 +106,7 @@ const settingsByToken = new Map();
 const settingsSaveFailures = new Set();
 const settingsReadFailures = new Set();
 const assetsByOwner = new Map();
+const assetSnapshotsByOwner = new Map();
 const assetSaveFailures = new Set();
 const assetReadFailures = new Set();
 
@@ -243,16 +244,32 @@ function withBalance(
   wallet,
   transactions,
   balance_as_of = new Date().toISOString().slice(0, 10),
+  snapshots,
 ) {
+  const month = balance_as_of.slice(0, 7);
+  const prior = new Date(`${month}-01T00:00:00Z`);
+  prior.setUTCMonth(prior.getUTCMonth() - 1);
+  const previous = snapshots?.get(prior.toISOString().slice(0, 7));
+  const opening = previous?.find(
+    (item) =>
+      item.source === "wallet" &&
+      item.id === wallet.id &&
+      item.currency === (wallet.currency ?? "EUR"),
+  );
   const movements = transactions
     .flatMap((item) => projectOccurrences(item, balance_as_of))
     .filter((item) => item.occurrence_date <= balance_as_of)
     .filter((item) => {
-      if (item.type !== "balance_adjustment") return true;
-      const effective = new Date(`${item.date}T00:00:00Z`);
-      effective.setUTCDate(1);
-      effective.setUTCMonth(effective.getUTCMonth() + 1);
-      return effective.toISOString().slice(0, 10) <= balance_as_of;
+      let effective = item.occurrence_date;
+      if (item.type === "balance_adjustment") {
+        const date = new Date(`${item.date}T00:00:00Z`);
+        date.setUTCDate(1);
+        date.setUTCMonth(date.getUTCMonth() + 1);
+        effective = date.toISOString().slice(0, 10);
+      }
+      return (
+        effective <= balance_as_of && (!previous || effective >= `${month}-01`)
+      );
     })
     .flatMap((item) => {
       if (item.destination_wallet_id === wallet.id) return [item.amount];
@@ -270,14 +287,65 @@ function withBalance(
     type: wallet.type ?? "bank",
     icon_image_url: wallet.icon_image_url ?? null,
     current_amount: movements.length
-      ? sumExact([wallet.initial_amount, ...movements])
-      : wallet.initial_amount,
+      ? sumExact([opening?.amount ?? wallet.initial_amount, ...movements])
+      : (opening?.amount ?? wallet.initial_amount),
     balance_as_of,
   };
 }
 
-function assetReport(wallets, transactions, assets, year) {
+function assetReport(wallets, transactions, assets, year, owner) {
   const as_of = new Date().toISOString().slice(0, 10);
+  const snapshots = assetSnapshotsByOwner.get(owner) ?? new Map();
+  const liveHoldings = (cutoff) => [
+    ...wallets.map((wallet) => ({
+      id: wallet.id,
+      name: wallet.name,
+      asset_group: "cash",
+      source: "wallet",
+      currency: wallet.currency ?? "EUR",
+      amount: withBalance(wallet, transactions, cutoff, snapshots)
+        .current_amount,
+    })),
+    ...assets.map((asset) => ({
+      id: asset.id,
+      name: asset.name,
+      asset_group: asset.asset_group,
+      source: "asset",
+      currency: asset.currency,
+      amount:
+        asset.valuations
+          .filter((value) => value.date <= cutoff)
+          .sort((a, b) => b.date.localeCompare(a.date))[0]?.amount ?? null,
+    })),
+  ];
+  if (wallets.length || assets.length || snapshots.size) {
+    const dates = [
+      ...transactions.map((item) => item.date),
+      ...assets.flatMap((item) => item.valuations.map((value) => value.date)),
+      ...wallets.map((item) => item.created_at.slice(0, 10)),
+    ].sort();
+    const origin = Math.min(
+      Number(dates[0]?.slice(0, 4) ?? as_of.slice(0, 4)),
+      Number(as_of.slice(0, 4)),
+    );
+    const month = new Date(
+      snapshots.size
+        ? `${[...snapshots.keys()].sort().at(-1)}-01T00:00:00Z`
+        : `${String(Math.max(1, origin - 1)).padStart(4, "0")}-${origin > 1 ? "12" : "01"}-01T00:00:00Z`,
+    );
+    if (snapshots.size) month.setUTCMonth(month.getUTCMonth() + 1);
+    while (month.toISOString().slice(0, 7) < as_of.slice(0, 7)) {
+      const end = new Date(month);
+      end.setUTCMonth(end.getUTCMonth() + 1);
+      end.setUTCDate(0);
+      snapshots.set(
+        month.toISOString().slice(0, 7),
+        liveHoldings(end.toISOString().slice(0, 10)),
+      );
+      month.setUTCMonth(month.getUTCMonth() + 1);
+    }
+    assetSnapshotsByOwner.set(owner, snapshots);
+  }
   const yearText = String(year).padStart(4, "0");
   const checkpoints = [
     year > 1 ? `${String(year - 1).padStart(4, "0")}-12-31` : null,
@@ -306,30 +374,33 @@ function assetReport(wallets, transactions, assets, year) {
     months: amounts.slice(1),
     latest: amounts[latest],
   });
-  const holdings = [
-    ...wallets.map((wallet) => ({
-      ...wallet,
-      asset_group: "cash",
-      source: "wallet",
-      currency: wallet.currency ?? "EUR",
-      amounts: checkpoints.map((cutoff) =>
-        cutoff
-          ? withBalance(wallet, transactions, cutoff).current_amount
-          : null,
-      ),
-    })),
-    ...assets.map((asset) => ({
-      ...asset,
-      source: "asset",
-      amounts: checkpoints.map((cutoff) =>
-        cutoff
-          ? (asset.valuations
-              .filter((value) => value.date <= cutoff)
-              .sort((a, b) => b.date.localeCompare(a.date))[0]?.amount ?? null)
-          : null,
-      ),
-    })),
-  ];
+  const positions = liveHoldings(as_of);
+  const collected = new Map();
+  const key = (item) => `${item.source}-${item.id}-${item.currency}`;
+  for (const [index, cutoff] of checkpoints.entries()) {
+    if (!cutoff) continue;
+    const current = cutoff.slice(0, 7) === as_of.slice(0, 7);
+    for (const item of current
+      ? positions
+      : (snapshots.get(cutoff.slice(0, 7)) ?? [])) {
+      if (!collected.has(key(item)))
+        collected.set(key(item), {
+          ...item,
+          active: positions.some((position) => key(position) === key(item)),
+          amounts: Array(13).fill(null),
+          present: Array(13).fill(false),
+        });
+      const holding = collected.get(key(item));
+      holding.amounts[index] = item.amount;
+      holding.present[index] = true;
+    }
+  }
+  const holdings = [...collected.values()];
+  for (const holding of holdings)
+    for (const [index, cutoff] of checkpoints.entries()) {
+      if (cutoff?.slice(0, 7) === as_of.slice(0, 7) && !holding.present[index])
+        holding.amounts[index] = "0";
+    }
   return {
     year,
     as_of,
@@ -376,7 +447,9 @@ function assetReport(wallets, transactions, assets, year) {
         );
         const missing_values = checkpoints.map((cutoff, i) =>
           cutoff
-            ? selected.filter((item) => item.amounts[i] === null).length
+            ? selected.filter(
+                (item) => item.present[i] && item.amounts[i] === null,
+              ).length
             : 0,
         );
         const change = net.map((amount, i) =>
@@ -663,6 +736,7 @@ const server = createServer(async (request, response) => {
           transactions,
           assets,
           Number(url.searchParams.get("year")),
+          assetOwner,
         ),
       );
     }
@@ -1546,7 +1620,14 @@ const server = createServer(async (request, response) => {
     return send(200, {
       wallets: wallets
         .slice((page - 1) * page_size, page * page_size)
-        .map((wallet) => withBalance(wallet, transactions)),
+        .map((wallet) =>
+          withBalance(
+            wallet,
+            transactions,
+            undefined,
+            assetSnapshotsByOwner.get(assetOwner),
+          ),
+        ),
       page,
       page_size,
       total: wallets.length,

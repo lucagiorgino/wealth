@@ -1,6 +1,7 @@
 "use client";
 
-import { Fragment, useState } from "react";
+import { Fragment, useEffect, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { ChevronDown, Landmark } from "lucide-react";
 import { AssetCharts } from "@/components/asset-charts";
@@ -184,7 +185,11 @@ function CurrencyAssets({ item, today }) {
                         <TableRow key={`${holding.source}-${holding.id}`}>
                           <TableHead scope="row" className={`${frozen} pl-6`}>
                             <span className="block">{holding.name}</span>
-                            {holding.source === "wallet" ? (
+                            {!holding.active ? (
+                              <span className="text-xs text-muted-foreground">
+                                Closed holding: frozen history
+                              </span>
+                            ) : holding.source === "wallet" ? (
                               <Link
                                 href="/wallets"
                                 className="inline-flex min-h-11 items-center text-xs text-primary-ink underline underline-offset-4"
@@ -242,6 +247,29 @@ function CurrencyAssets({ item, today }) {
 }
 
 export function AssetSummary({ summary }) {
+  const router = useRouter();
+  const [refreshing, startTransition] = useTransition();
+  useEffect(() => {
+    if (summary.year !== Number(summary.as_of.slice(0, 4))) return;
+    function refresh() {
+      if (
+        document.visibilityState === "visible" &&
+        !refreshing &&
+        !document.querySelector(
+          '[role="dialog"][data-state="open"], [role="alertdialog"][data-state="open"]',
+        )
+      )
+        startTransition(() => router.refresh());
+    }
+    const timer = window.setInterval(refresh, 30000);
+    window.addEventListener("focus", refresh);
+    document.addEventListener("visibilitychange", refresh);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener("focus", refresh);
+      document.removeEventListener("visibilitychange", refresh);
+    };
+  }, [summary.year, summary.as_of, router, refreshing]);
   if (!summary.currencies.length)
     return (
       <Empty className="border">

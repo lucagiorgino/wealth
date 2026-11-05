@@ -1,6 +1,7 @@
 from datetime import date
 from uuid import UUID
 
+from app.db.asset_snapshots import financial_connection
 from app.db.occurrences import OCCURRENCES
 from app.db.postgres import database_connection
 from app.schemas.transactions import (
@@ -99,7 +100,7 @@ async def wallet_options(subject: str) -> TransactionOptions:
 async def save_transaction(
     subject: str, data: TransactionInput, transaction_id: UUID | None = None
 ) -> Transaction:
-    async with database_connection() as connection:
+    async with financial_connection(subject) as connection:
         if transaction_id is not None:
             cursor = await connection.execute(
                 "SELECT id FROM transactions WHERE id = %s AND owner_subject = %s FOR UPDATE",
@@ -170,7 +171,7 @@ async def pin_transactions(connection, subject: str, ids: list[UUID], pinned: bo
 
 
 async def delete_transactions(subject: str, ids: list[UUID]) -> None:
-    async with database_connection() as connection:
+    async with financial_connection(subject) as connection:
         await lock_transactions(connection, subject, ids)
         await connection.execute(
             "DELETE FROM transactions WHERE owner_subject = %s AND id = ANY(%s)", (subject, ids)
@@ -190,7 +191,7 @@ async def get_transaction(subject: str, transaction_id: UUID) -> Transaction:
 
 
 async def delete_transaction(subject: str, transaction_id: UUID) -> None:
-    async with database_connection() as connection:
+    async with financial_connection(subject) as connection:
         cursor = await connection.execute(
             "DELETE FROM transactions WHERE id = %s AND owner_subject = %s RETURNING id",
             (transaction_id, subject),

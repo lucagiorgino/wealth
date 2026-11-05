@@ -191,12 +191,12 @@ It seeds no holdings or spreadsheet amounts. Existing development services can
 remain running; no dependencies, environment variables, workers or price feeds
 are required.
 
-Wallet cash is reconstructed automatically. Use **Add asset** only for values
+Wallet cash is supplied automatically. Use **Add asset** only for values
 not already counted in wallets, choose a group/currency, then record a dated
 nonnegative total valuation. Record debt under Liabilities and zero to close a
 holding without erasing history. Row controls save later or backdated valuations;
 the same date replaces the existing value. Deleting a holding permanently removes
-all its valuations and changes historical reports. These tables belong in the
+all its valuations but preserves frozen month-end reports. These tables belong in the
 same PostgreSQL backup/restore policy as other financial data.
 See [the exact contract](API.md#assets-and-patrimony) for missing-value, cutoff,
 reconstruction and no-conversion semantics.
@@ -206,6 +206,19 @@ transactions. Enter a signed delta and posting date; it changes the first-day
 starting balance of the following UTC month, not the posting month's close.
 Leave category, destination and recurrence blank (including in CSV imports).
 It never contributes to P&L; see [the adjustment contract](API.md#balance-adjustments).
+
+Apply `017_month_end_balances.sql` before enabling monthly closure. The API
+lifespan worker checks every 60 seconds, closing the previous month after the UTC
+boundary and catching up after downtime; no separate service or scheduler is
+needed. Assets reads and financial writes also close pending months under an
+owner lock, before changing data. Database outages produce explicit 503s and
+closure retry logs; unexpected worker failures log their exception type.
+Initial history is reconstructed once from currently available records, not
+recovered from past edits. Back up `asset_snapshot_state` and
+`asset_balance_snapshots` with the rest of PostgreSQL: restoring definitions
+alone loses the frozen history. Do not update/rebuild existing snapshot rows.
+The current-year UI refreshes every 30 seconds while visible/on return and skips
+open forms. See [closure semantics](API.md#month-end-closure-and-initial-history).
 
 ### Profile image imports
 

@@ -224,8 +224,8 @@ export function DeleteAssetButton({ asset }) {
           <DialogTitle>Delete {asset.name}?</DialogTitle>
           <DialogDescription>
             This permanently deletes the holding and every recorded valuation.
-            It changes all historical asset reports. Wallets and transactions
-            are not deleted.
+            Frozen month-end balances remain visible as a closed holding.
+            Wallets and transactions are not deleted.
           </DialogDescription>
         </DialogHeader>
         <form action={action} className="space-y-4">

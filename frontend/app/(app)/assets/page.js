@@ -56,6 +56,12 @@ export default async function Assets({ searchParams }) {
             dated valuations, carried forward without market-price updates or
             currency conversion.
           </p>
+          <p className="text-sm text-muted-foreground">
+            Completed UTC months are frozen. Current-month balances use the
+            previous close plus active movements and refresh every 30 seconds
+            while visible, or when you return to this page. Balance Adjustments
+            reconcile the following month, never P&L.
+          </p>
           <AssetSummary summary={result} />
         </>
       )}

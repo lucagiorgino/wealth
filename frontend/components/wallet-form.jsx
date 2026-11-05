@@ -338,7 +338,9 @@ export function WalletForm({ wallet, onSaved }) {
         <p id="wallet-amount-help" className="text-sm text-muted-foreground">
           Slide from -100,000 to 100,000 in steps of 0.01, or enter any exact
           amount below the slider, including more decimal places. Defaults to 0.
-          Current balance includes transactions due through today UTC.
+          Current balance includes transactions due through today UTC. After a
+          month-end close is frozen, use Balance Adjustment to reconcile a later
+          opening balance rather than changing this initial amount.
         </p>
       </div>
       <Feedback state={state} />

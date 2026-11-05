@@ -102,7 +102,9 @@ default data or a successful save. All responses are private/no-store.
   Bonds (`bonds`), Other assets (`other`), and Liabilities (`liabilities`), omitting
   groups without holdings. Each group has `key`, `label`, `values`, and `holdings`.
   Holdings expose `id`, `name`, `asset_group`, `currency`, `source` (`wallet` or
-  `asset`), and `values`; wallet IDs are not manual asset IDs.
+  `asset`), `active` (boolean), and `values`; wallet IDs are not manual asset IDs.
+  A deleted holding or an old wallet currency remains in frozen history with
+  `active: false`; clients must not expose mutation controls for that row.
 - `assets`, `liabilities`, `net_worth`, `change`, and `change_percent`: each has
   `opening`, twelve January–December `months`, and `latest`. Monetary and percentage
   values are decimal strings or null. Opening is the previous December 31
@@ -123,13 +125,38 @@ default data or a successful save. All responses are private/no-store.
   These dimensionless coordinates/ticks are generated server-side; consumers must
   not convert financial strings to floating-point numbers.
 
-All wallet types supply **cash**, reconstructed using their current initial
-amounts and the shared anchored recurrence projection, including signed expenses
-and both transfer directions. This is not an immutable historical ledger: wallet
-edits/deletions and transaction/series edits also change historical reports.
-No wallet balance is persisted. Trading/exchange labels do not imply securities
-or market-price feeds. Manual positions must exclude amounts already represented
-in wallets to avoid double counting.
+All wallet types supply **cash**. Completed UTC months use immutable persisted
+closing balances. Current cash starts from the previous frozen close plus owned
+movements effective this month through today, including signed expenses,
+anchored recurrence, both transfer directions and neutral adjustments. A newly
+introduced wallet/currency uses its initial amount plus this month's movements.
+Before snapshot activation, the legacy cumulative projection is still used.
+Editing old transactions or an initial amount cannot rewrite a frozen close or
+its carried-forward opening; use a Balance Adjustment for reconciliation.
+Trading/exchange labels do not imply market-price feeds. Manual positions must
+exclude amounts already represented in wallets to avoid double counting.
+
+### Month-end closure and initial history
+
+Migration `017_month_end_balances.sql` adds an owner-scoped closure cursor and
+snapshots keyed by owner, source kind, source UUID, currency and month. The API
+lifespan starts a worker when PostgreSQL is configured. It checks every 60 seconds,
+closing the completed month just after midnight on the first UTC day of the next
+month. It also catches up after downtime. Assets reads and initialized owners'
+financial mutations catch up under the same owner advisory lock; mutation catch-up
+happens before changes in the same transaction. Failed writes roll back their
+catch-up too. Concurrent workers/requests cannot duplicate or overwrite a close.
+Snapshot UPDATEs are refused by a database trigger.
+
+**Existing history is reconstructed once from records available at activation**,
+starting with December before the earliest recorded year (January for year 1).
+It cannot recover edits or deleted holdings predating activation. Subsequent
+closures are immutable. Late additions/backdated edits never enter sealed months
+or alter their missing-coverage counts; absent sources are not unvalued sources.
+Periods before this initial history and future periods are unavailable.
+Frozen rows have no live-source FK, so deleting a wallet/holding or changing an
+allowed wallet currency preserves history. Deleting the owning user cascades all
+its snapshots. Live balances themselves are never persisted.
 
 `POST /api/v1/assets` accepts a closed object:
 
@@ -156,12 +183,14 @@ the holding and first valuation, preserving profile and settings.
 `PUT /api/v1/assets/{id}/valuations` accepts only `date` and `amount` with the same
 rules. It adds a dated snapshot or replaces that date atomically under an owned
 holding lock. A snapshot carries forward until the next dated valuation; before
-the first snapshot it is unknown. A backdated save affects historical months.
+the first valuation it is unknown. Backdated saves may update the latest live
+manual value, but never a sealed historical month.
 Metadata has no update endpoint in this version. Closing a holding uses a zero
 valuation, preserving earlier values.
 
 `DELETE /api/v1/assets/{id}` deletes the manual holding and its entire valuation
-history, changing historical reports without deleting wallets or transactions.
+history, without deleting frozen balances, wallets or transactions. Retained
+historical rows become inactive; their current contribution is zero.
 Both mutations return 404 for foreign/missing IDs, including wallet IDs.
 Invalid inputs, extra fields and supplied owners return 422; unavailable persistence
 returns explicit 503. All routes require verified identity and are private/no-store.
@@ -371,19 +400,23 @@ and private/no-store response rules.
 
 ### Wallet balances, editing, and deletion
 
-`current_amount` is an exact decimal string calculated as initial amount plus
-income minus expenses, plus incoming transfers minus outgoing transfers. It
-counts only occurrences dated on or before `balance_as_of` (today UTC), using
-the same anchored recurrence projection as transaction history. Future entries,
-including a series' first future entry, do not affect a current balance.
-Finite/indefinite recurrence, transaction edits/deletions, and confirmed imports
-are reflected on the next read without stored balance updates or a scheduler.
+`current_amount` is an exact decimal string. After snapshot activation it uses
+the previous frozen close plus this month's due income minus expenses, incoming
+minus outgoing transfers, and effective Balance Adjustments. New sources/currencies
+use their initial amount plus this month's movements. Before activation the
+legacy cumulative initial-plus-movements projection applies.
+It counts only effective movements through `balance_as_of` (today UTC), using
+the shared anchored recurrence projection. Future entries do not affect balances.
+Current-month mutations/imports are reflected on the next read; historical edits
+never rewrite the carried-forward frozen close. Pending month closure precedes
+financial writes and initialized wallet reads under the shared owner lock.
 Negative balances are allowed. Reads do not provision users or change initial amounts.
 No rounding, exchange-rate conversion, or cross-currency totals are provided.
 
 `PUT /api/v1/wallets/{id}` fully replaces editable fields using the creation
 schema and defaults, returning the same wallet response with recomputed balance.
-Changing the initial amount explicitly recalculates the balance; IDs, creation
+Changing the initial amount recalculates only an unfrozen starting balance;
+use Balance Adjustment after a frozen close. IDs, creation
 timestamps, transaction references, and account preferences remain unchanged.
 Currency changes are refused with 409
 `Currency cannot change while wallet has transactions` if any definition
@@ -471,7 +504,9 @@ They are excluded from income, expense, transfer and net sums, wallet expense
 breakdowns, annual cash-flow charts and spending comparisons. An adjustment-only
 history may show currency totals of zero; it never treats the delta as P&L.
 Budgets are not implemented. Editing/deleting an adjustment changes its delta
-in the live projection rather than reclassifying it as income or an expense.
+only in an unfrozen live projection, never a completed balance. Post a new
+adjustment to reverse/reconcile a frozen reconciliation; it is never reclassified
+as income or an expense.
 Bulk conversion must explicitly clear category, subcategory, destination and
 recurrence fields; the frontend does so automatically. Category-free CSV rows
 use type `balance_adjustment`, with those relationship fields blank.

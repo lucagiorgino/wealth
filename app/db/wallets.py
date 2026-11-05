@@ -1,8 +1,8 @@
 from datetime import date
 from uuid import UUID
 
+from app.db.asset_snapshots import financial_connection
 from app.db.occurrences import OCCURRENCES, WALLET_MOVEMENTS
-from app.db.postgres import database_connection
 from app.schemas.wallets import Wallet, WalletCreate, WalletList
 from app.services.wallet_icons import InvalidWalletIcon
 
@@ -38,7 +38,7 @@ async def wallet_page(
 ) -> list[Wallet]:
     cursor = await connection.execute(
         f"""
-        WITH selected_wallets AS (
+        WITH balance_cutoff AS (SELECT %s::date AS date), selected_wallets AS (
             SELECT id, name, colour, icon, type, favicon_png, initial_amount, currency, created_at
             FROM wallets WHERE owner_subject = %s AND (%s::uuid IS NULL OR id = %s)
             ORDER BY created_at, id LIMIT %s OFFSET %s
@@ -47,15 +47,35 @@ async def wallet_page(
             AND (t.source_wallet_id IN (SELECT id FROM selected_wallets)
                  OR t.destination_wallet_id IN (SELECT id FROM selected_wallets))
         ), occurrences AS ({OCCURRENCES}), movements AS ({WALLET_MOVEMENTS}), totals AS (
-            SELECT wallet_id, sum(amount) AS amount FROM movements
-            WHERE movement_date <= %s GROUP BY wallet_id
+            SELECT w.id, COALESCE(s.amount, w.initial_amount) + COALESCE(sum(m.amount), 0) AS amount
+            FROM selected_wallets w CROSS JOIN balance_cutoff c
+            LEFT JOIN asset_balance_snapshots s ON s.owner_subject = %s
+                AND s.source = 'wallet' AND s.source_id = w.id AND s.currency = w.currency
+                AND s.month = date_trunc('month', c.date)::date - interval '1 month'
+            LEFT JOIN asset_snapshot_state st ON st.owner_subject = %s
+            LEFT JOIN movements m ON m.wallet_id = w.id AND m.movement_date <= c.date
+                AND ((s.amount IS NULL AND (st.through_month IS NULL
+                    OR st.through_month < date_trunc('month', c.date)::date - interval '1 month'))
+                    OR m.movement_date >= date_trunc('month', c.date)::date)
+            GROUP BY w.id, w.initial_amount, s.amount, st.through_month
         )
-        SELECT w.*, w.initial_amount + COALESCE(t.amount, 0) AS current_amount,
-            %s::date AS balance_as_of
-        FROM selected_wallets w LEFT JOIN totals t ON t.wallet_id = w.id
+        SELECT w.*, t.amount AS current_amount, c.date AS balance_as_of
+        FROM selected_wallets w LEFT JOIN totals t ON t.id = w.id
+        CROSS JOIN balance_cutoff c
         ORDER BY w.created_at, w.id
         """,
-        (subject, wallet_id, wallet_id, page_size, (page - 1) * page_size, subject, *(as_of,) * 6),
+        (
+            as_of,
+            subject,
+            wallet_id,
+            wallet_id,
+            page_size,
+            (page - 1) * page_size,
+            subject,
+            *(as_of,) * 4,
+            subject,
+            subject,
+        ),
     )
     return [Wallet.model_validate(row) for row in await cursor.fetchall()]
 
@@ -63,7 +83,7 @@ async def wallet_page(
 async def create_wallet(
     owner_subject: str, data: WalletCreate, as_of: date, image: bytes | None = None
 ) -> Wallet:
-    async with database_connection() as connection:
+    async with financial_connection(owner_subject) as connection:
         await connection.execute(
             "INSERT INTO users (subject) VALUES (%s) ON CONFLICT (subject) DO NOTHING",
             (owner_subject,),
@@ -92,8 +112,7 @@ async def create_wallet(
 
 
 async def list_wallets(owner_subject: str, page: int, page_size: int, as_of: date) -> WalletList:
-    async with database_connection() as connection:
-        await connection.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY")
+    async with financial_connection(owner_subject) as connection:
         cursor = await connection.execute(
             "SELECT count(*) AS total FROM wallets WHERE owner_subject = %s",
             (owner_subject,),
@@ -110,7 +129,7 @@ async def list_wallets(owner_subject: str, page: int, page_size: int, as_of: dat
 async def update_wallet(
     subject: str, wallet_id: UUID, data: WalletCreate, as_of: date, image: bytes | None = None
 ) -> Wallet:
-    async with database_connection() as connection:
+    async with financial_connection(subject) as connection:
         cursor = await connection.execute(
             "SELECT currency, favicon_png FROM wallets "
             "WHERE id = %s AND owner_subject = %s FOR UPDATE",
@@ -146,7 +165,7 @@ async def update_wallet(
 
 
 async def delete_wallet(subject: str, wallet_id: UUID) -> None:
-    async with database_connection() as connection:
+    async with financial_connection(subject) as connection:
         cursor = await connection.execute(
             "SELECT id FROM wallets WHERE id = %s AND owner_subject = %s FOR UPDATE",
             (wallet_id, subject),

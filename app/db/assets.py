@@ -1,8 +1,7 @@
-from datetime import date
 from uuid import UUID
 
-from app.db.occurrences import OCCURRENCES, WALLET_MOVEMENTS
-from app.db.postgres import database_connection
+from app.db.asset_snapshots import annual_holdings as annual_holdings
+from app.db.asset_snapshots import financial_connection
 from app.schemas.assets import AssetCreate, AssetPosition, AssetValuationInput
 
 
@@ -11,7 +10,7 @@ class AssetNotFound(Exception):
 
 
 async def create_asset(subject: str, data: AssetCreate) -> AssetPosition:
-    async with database_connection() as connection:
+    async with financial_connection(subject) as connection:
         await connection.execute(
             "INSERT INTO users (subject) VALUES (%s) ON CONFLICT (subject) DO NOTHING", (subject,)
         )
@@ -31,7 +30,7 @@ async def create_asset(subject: str, data: AssetCreate) -> AssetPosition:
 
 
 async def save_valuation(subject: str, asset_id: UUID, data: AssetValuationInput) -> None:
-    async with database_connection() as connection:
+    async with financial_connection(subject) as connection:
         cursor = await connection.execute(
             "SELECT id FROM assets WHERE id = %s AND owner_subject = %s FOR UPDATE",
             (asset_id, subject),
@@ -47,44 +46,10 @@ async def save_valuation(subject: str, asset_id: UUID, data: AssetValuationInput
 
 
 async def delete_asset(subject: str, asset_id: UUID) -> None:
-    async with database_connection() as connection:
+    async with financial_connection(subject) as connection:
         cursor = await connection.execute(
             "DELETE FROM assets WHERE id = %s AND owner_subject = %s RETURNING id",
             (asset_id, subject),
         )
         if await cursor.fetchone() is None:
             raise AssetNotFound
-
-
-async def annual_holdings(subject: str, checkpoints: list[date | None], as_of: date) -> list[dict]:
-    async with database_connection() as connection:
-        await connection.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY")
-        cursor = await connection.execute(
-            f"""
-            WITH periods AS (
-                SELECT cutoff, ordinality::int - 1 AS period
-                FROM unnest(%s::date[]) WITH ORDINALITY AS p(cutoff, ordinality)
-            ), definitions AS (
-                SELECT * FROM transactions WHERE owner_subject = %s
-            ), occurrences AS ({OCCURRENCES}), movements AS ({WALLET_MOVEMENTS})
-            SELECT w.id, w.name, 'cash' AS asset_group, w.currency, 'wallet' AS source,
-                p.period, CASE WHEN p.cutoff IS NULL THEN NULL
-                    ELSE w.initial_amount + COALESCE(sum(m.amount), 0) END AS amount
-            FROM wallets w CROSS JOIN periods p
-            LEFT JOIN movements m ON m.wallet_id = w.id AND m.movement_date <= p.cutoff
-            WHERE w.owner_subject = %s
-            GROUP BY w.id, p.period, p.cutoff
-            UNION ALL
-            SELECT a.id, a.name, a.asset_group, a.currency, 'asset', p.period, v.amount
-            FROM assets a CROSS JOIN periods p
-            LEFT JOIN LATERAL (
-                SELECT amount FROM asset_valuations
-                WHERE asset_id = a.id AND owner_subject = %s AND date <= p.cutoff
-                ORDER BY date DESC LIMIT 1
-            ) v ON true
-            WHERE a.owner_subject = %s
-            ORDER BY currency, asset_group, name, id, period
-            """,
-            (checkpoints, subject, *(as_of,) * 4, subject, subject, subject),
-        )
-        return list(await cursor.fetchall())

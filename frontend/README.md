@@ -219,9 +219,9 @@ and refusal behavior. Wallet types are labels, not bank/exchange integrations.
 
 In the table,
 horizontal keyboard scrolling and sticky 44px edit/delete actions remain usable
-on phones. Current amounts are computed server-side from initial amounts and
-income/expenses/transfers due through the displayed UTC date, including recurring
-occurrences. Future entries do not affect current amounts.
+on phones. Current amounts carry the previous frozen close plus this month's
+effective income/expenses/transfers and Balance Adjustments through the displayed
+UTC date, including recurring occurrences. Future entries do not affect amounts.
 
 **Add wallet** opens a focused creation dialog with an appearance preview, name,
 colour, icon, currency (default Euro/EUR), and initial amount (default `0`). Errors retain all fields and keep
@@ -234,7 +234,8 @@ first, so a new wallet may appear on a later page. Persistence/validation
 failures are shown explicitly.
 
 Row **Edit wallet** opens the same form with existing values and preserves edits
-on failure. Changing the starting amount recalculates the balance.
+on failure. Changing the initial amount recalculates only an unfrozen starting
+balance; use Balance Adjustment after a month-end close.
 Currency cannot change while any transaction references the wallet.
 Row **Delete wallet** opens a confirmation alert with Cancel focused by default.
 Referenced source/destination wallets refuse deletion without removing history.
@@ -476,22 +477,28 @@ Missing valuations display dashes, not invented zeros. Totals include recorded
 holdings only and expose a coverage warning; changes require complete adjacent
 months and percentages from zero remain undefined.
 
-Existing wallets supply cash automatically from their current initial amounts and
-due recurring transactions. These are reconstructed balances: wallet/series edits
-change historical reports. Bank/trading/exchange labels do not connect financial
+Existing wallets supply cash from the previous frozen close plus this month's
+active movements. Completed UTC months are immutable snapshots; only initial
+history is seeded once from existing records. Later wallet/series edits cannot
+change frozen history. Use Balance Adjustment for the next opening, not edits to
+old initial amounts. The current-year page refreshes every 30 seconds while
+visible and on focus/return, skipping open dialogs to preserve unsaved edits.
+Bank/trading/exchange labels do not connect financial
 providers or value investments. **Add asset** records a separate holding's group,
 currency and first dated total valuation; do not include cash already counted in
 wallets. Manual holdings have **Record valuation** and confirmed **Delete asset**
 controls. Saving the same date replaces it; other dates add history, carrying the
 value forward until another recorded valuation. Record zero to close a position.
-Enter debt as a positive liability. Deletion removes the entire valuation history.
+Enter debt as a positive liability. Deletion removes the valuation definitions
+but preserves month-end balances as a closed holding without edit/delete controls.
+Late holdings do not retroactively appear in sealed months or reduce their coverage.
 Metadata editing and individual snapshot deletion are not yet exposed.
 
 Failed saves keep the dialog and all edits for retry. Successful wallet,
 transaction/import and valuation mutations revalidate Assets. Reads/failures do
 not add sample holdings or seed the reference spreadsheet's private figures.
 There are no live quotes, quantities, forecasts or currency conversion.
-Apply migration `015_assets.sql` with `make migrate`; no dependency or environment
+Apply migrations `015_assets.sql` through `017_month_end_balances.sql` with `make migrate`; no dependency or environment
 change is required. See [the HTTP contract](../docs/API.md#assets-and-patrimony)
 and [Mermaid diagrams](../docs/IMPLEMENTATION_STATUS.md#assets-and-patrimony).
 

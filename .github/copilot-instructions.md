@@ -7,7 +7,7 @@ account profile, and category pages. Users can
 manage their own currency-denominated wallets with computed current balances,
 manage a Wealth display name/icon/custom image, and customize
 private two-level categories with optional predefined groups. Transactions support
-income, expenses, transfers, and recurring series. Assets combine reconstructed wallet cash
+income, expenses, transfers, balance adjustments, and recurring series. Assets combine live/frozen wallet cash
 and dated manual asset/liability valuations. Live market prices and currency
 conversion remain planned. Do not present planned behavior as implemented.
 
@@ -20,7 +20,7 @@ conversion remain planned. Do not present planned behavior as implemented.
 - **Frontend:** Next.js App Router SSR in JavaScript/JSX with Tailwind and
   registry-generated shadcn/ui components. Read `frontend/AGENTS.md` and relevant
   bundled Next.js guides before changing framework APIs.
-- **Persistence:** PostgreSQL users, wallets, categories, subcategories, transactions, assets, and asset valuations with numbered SQL migrations.
+- **Persistence:** PostgreSQL users, wallets, categories, subcategories, transactions, assets, valuations, and frozen monthly balances with numbered SQL migrations.
   Python owns persistence and authorization; the frontend must not query the
   database. `app/db/migrate.py` applies pending files transactionally under an
   advisory lock before the Compose API starts.
@@ -129,7 +129,7 @@ PostgreSQL persistence; database-backed API tests cover persistence and ownershi
 - Wallet currency defaults to EUR; supported codes align with the shared currency
   allowlist, SQL constraint, and frontend controls. Balances use the shared anchored
   occurrence projection and count only entries due through today UTC, including
-  incoming/outgoing transfers. Never persist balances or modify initial amounts
+  incoming/outgoing transfers. Never persist live balances or modify initial amounts
   when saving transactions. Referenced wallets cannot be deleted or change currency.
 - Transaction amounts are nonzero exact decimals: expenses may be negative,
   balance adjustments may be signed; income/transfers must remain positive. Negative expenses reduce spending and
@@ -168,8 +168,13 @@ PostgreSQL persistence; database-backed API tests cover persistence and ownershi
   Yearly averages use inclusive year ranges,
   include zero-spend years, and count an included partial current year without
   annualizing it. Refuse future endpoints; round the exact ratio once to 18 places.
-- Assets reconstruct cash from current wallet definitions/initial amounts and the
-  shared due-occurrence projection. Manual nonnegative valuations carry forward;
+- Assets freeze completed UTC months under an owner advisory lock. Current wallet
+  cash carries the previous close plus this month's effective movements. Initial
+  history is seeded once; later writes cannot overwrite snapshots. Pending closure
+  precedes financial mutations transactionally and runs every 60 seconds at API
+  startup/runtime. Preserve closed sources/currencies without live-source FKs;
+  absent historical sources must not count as missing valuations.
+  Manual nonnegative valuations carry forward;
   liabilities subtract from net worth. Keep currencies separate and missing/future
   values distinct from zero. Never sum snapshots across months. Incomplete adjacent
   months have no change; percentage change from zero is undefined.

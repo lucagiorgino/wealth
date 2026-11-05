@@ -64,6 +64,7 @@ class AssetValues(BaseModel):
 
 class AssetHolding(AssetPosition):
     source: Literal["wallet", "asset"]
+    active: bool
     values: AssetValues
 
 

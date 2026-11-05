@@ -1,6 +1,7 @@
 import hashlib
 import json
 
+from app.db.asset_snapshots import financial_connection
 from app.db.categories import category_name_conflicts
 from app.db.postgres import database_connection
 from app.db.transactions import insert_transaction
@@ -53,7 +54,7 @@ async def confirm_import(subject: str, request: ImportRequest) -> ImportResult:
             separators=(",", ":"),
         ).encode()
     ).hexdigest()
-    async with database_connection() as connection:
+    async with financial_connection(subject) as connection:
         await connection.execute(
             "SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))",
             (f"transaction-import-references:{subject}",),

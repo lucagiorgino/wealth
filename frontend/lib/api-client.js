@@ -885,6 +885,7 @@ export async function fetchAssetSummary(options, year) {
                 holding.asset_group !== group.key ||
                 holding.currency !== item.currency ||
                 !["wallet", "asset"].includes(holding.source) ||
+                typeof holding.active !== "boolean" ||
                 !validValues(holding.values),
             ),
         ) ||
@@ -940,6 +941,7 @@ export async function fetchAssetSummary(options, year) {
             asset_group: holding.asset_group,
             currency: holding.currency,
             source: holding.source,
+            active: holding.active,
             values: values(holding.values),
           })),
         })),
