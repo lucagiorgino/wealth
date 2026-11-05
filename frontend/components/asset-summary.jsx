@@ -54,19 +54,14 @@ function Amount({ value, currency, percent = false }) {
 }
 
 function ValueCells({ values, currency, percent }) {
-  return [values.opening, ...values.months, values.latest].map(
-    (value, index) => (
-      <TableCell
-        key={index}
-        className={`min-w-28 px-3 text-right tabular-nums ${index === 13 ? "bg-accent/60 font-semibold" : ""}`}
-      >
-        <Amount value={value} currency={currency} percent={percent} />
-      </TableCell>
-    ),
-  );
+  return values.months.map((value, index) => (
+    <TableCell key={index} className="min-w-28 px-3 text-right tabular-nums">
+      <Amount value={value} currency={currency} percent={percent} />
+    </TableCell>
+  ));
 }
 
-function CurrencyAssets({ item, year, today }) {
+function CurrencyAssets({ item, today }) {
   const [collapsed, setCollapsed] = useState(new Set());
   const showDetails = collapsed.size < item.groups.length;
   const missing = item.missing_values.some((count) => count > 0);
@@ -147,9 +142,6 @@ function CurrencyAssets({ item, year, today }) {
                   <TableHead scope="col" className={frozen}>
                     Asset / liability
                   </TableHead>
-                  <TableHead scope="col" className="min-w-28 px-3 text-right">
-                    Opening
-                  </TableHead>
                   {months.map((month) => (
                     <TableHead
                       key={month}
@@ -159,12 +151,6 @@ function CurrencyAssets({ item, year, today }) {
                       {month}
                     </TableHead>
                   ))}
-                  <TableHead
-                    scope="col"
-                    className="min-w-28 bg-accent/60 px-3 text-right"
-                  >
-                    Latest
-                  </TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -244,7 +230,6 @@ function CurrencyAssets({ item, year, today }) {
             </Table>
           </div>
           <p className="text-sm text-muted-foreground">
-            {year > 1 ? `Opening is December 31, ${year - 1}. ` : ""}
             Completed months use month-end values; the current month stops
             today. Dashes mean no valuation or a future month, not zero.
             Allocation excludes liabilities. Snapshot balances are never summed
@@ -279,7 +264,6 @@ export function AssetSummary({ summary }) {
     <CurrencyAssets
       key={`${summary.year}-${item.currency}`}
       item={item}
-      year={summary.year}
       today={summary.as_of}
     />
   ));

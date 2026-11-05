@@ -892,7 +892,7 @@ See [the API contract](API.md#assets-and-patrimony) for complete semantics.
 flowchart LR
     Page["Authenticated Assets SSR page"] -->|"Server-only token, no-store"| API["FastAPI verified identity"]
     Page --> Charts["Aligned monthly line/bar and allocation bar/donut charts"]
-    Page --> Table["Per-currency expandable monthly table and exact totals"]
+    Page --> Table["Per-currency expandable January-December table and exact totals; no Opening or Latest columns"]
     Forms["Session-checked asset/valuation actions"] --> API
     API --> Report["Patrimony service: fixed UTC checkpoints and exact arithmetic"]
     Report --> Query["One owned read-only snapshot"]

@@ -59,12 +59,17 @@ test("Assets keeps Summary charts aligned, shows exact patrimony and preserves f
     table
       .getByRole("row")
       .filter({ has: page.getByText(name, { exact: true }) });
+  await expect(table.getByRole("columnheader")).toHaveCount(13);
+  await expect(
+    table.getByRole("columnheader", { name: /^(Opening|Latest)$/ }),
+  ).toHaveCount(0);
+  await expect(row("Net worth").getByRole("cell")).toHaveCount(12);
   await expect(row("Net worth").getByRole("cell").last()).toContainText("3450");
-  await expect(row("Everyday cash").getByRole("cell").nth(1)).toContainText(
+  await expect(row("Everyday cash").getByRole("cell").nth(0)).toContainText(
     "1000",
   );
   await expect(row("Loan").getByRole("cell").last()).toContainText("300");
-  await expect(row("Monthly change (%)").getByRole("cell").nth(1)).toHaveText(
+  await expect(row("Monthly change (%)").getByRole("cell").nth(0)).toHaveText(
     "0%",
   );
 
@@ -141,7 +146,7 @@ test("Assets keeps Summary charts aligned, shows exact patrimony and preserves f
   );
   await dialog.getByRole("button", { name: "Add asset", exact: true }).click();
   await expect(dialog).not.toBeVisible();
-  await expect(row("Property").getByRole("cell").nth(1)).toContainText(
+  await expect(row("Property").getByRole("cell").nth(0)).toContainText(
     "10000.000000000000000001",
   );
   await page
@@ -155,7 +160,7 @@ test("Assets keeps Summary charts aligned, shows exact patrimony and preserves f
   await valuation.getByLabel("Value (EUR)", { exact: true }).fill("10100.25");
   await valuation.getByRole("button", { name: "Save valuation" }).click();
   await expect(valuation).not.toBeVisible();
-  await expect(row("Property").getByRole("cell").nth(2)).toContainText(
+  await expect(row("Property").getByRole("cell").nth(1)).toContainText(
     "10100.25",
   );
   await expect(row("Property").getByRole("cell").last()).toContainText(

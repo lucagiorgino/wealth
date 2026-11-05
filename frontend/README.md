@@ -461,10 +461,11 @@ Allocation excludes liabilities; negative cash keeps signed bars and disables
 donut shares instead of converting negatives into positive slices.
 
 The monthly table groups Cash, Stocks / ETF, Crypto, Bonds, Other assets and
-Liabilities, with expandable holdings, Opening, January–December and Latest.
+Liabilities, with expandable holdings and January–December columns only.
 Hide/show holdings keeps group totals visible. Its footer shows assets, liabilities,
 net worth, absolute monthly change and percentage change. Snapshots are never summed
-across months. Opening uses previous December 31; completed months use month-end,
+across months. Cards retain the latest available value; the previous December
+31 opening remains internal to January's change calculation. Completed months use month-end,
 the current month uses today UTC, and future months remain unavailable.
 Missing valuations display dashes, not invented zeros. Totals include recorded
 holdings only and expose a coverage warning; changes require complete adjacent
