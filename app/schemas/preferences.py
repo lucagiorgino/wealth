@@ -2,12 +2,13 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-SidebarPage = Literal["dashboard", "wallets", "transactions", "summary", "categories"]
+SidebarPage = Literal["dashboard", "wallets", "transactions", "summary", "comparison", "categories"]
 DEFAULT_SIDEBAR_ORDER: list[SidebarPage] = [
     "dashboard",
     "wallets",
     "transactions",
     "summary",
+    "comparison",
     "categories",
 ]
 
@@ -16,7 +17,7 @@ class Preferences(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     theme: Literal["light", "dark"]
-    sidebar_order: list[SidebarPage] = Field(min_length=5, max_length=5)
+    sidebar_order: list[SidebarPage] = Field(min_length=6, max_length=6)
 
     @field_validator("sidebar_order")
     @classmethod

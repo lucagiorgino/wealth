@@ -64,8 +64,9 @@ The authenticated landing dashboard lives at `/dashboard`; `/wallets` owns
 wallet tables, creation, editing, protected deletion, and balances; `/transactions` manages paginated, filterable
 income/expense/transfer transactions, `/categories` manages private categories and
 subcategories, and `/account` manages local profile preferences.
-`/summary` provides annual analysis; `/settings`, opened from the account menu,
-manages saved light/dark appearance and the order of the five sidebar features.
+`/summary` provides annual analysis; `/compare-spending` owns read-only period
+comparisons through a dedicated sidebar entry. `/settings`, opened from the account menu,
+manages saved light/dark appearance and the order of the six sidebar features.
 These pages use a shared responsive sidebar with active
 navigation and a bottom account menu (image/icon, saved name, optional session
 email, management links, and sign-out). Account management is in that footer,
@@ -112,6 +113,8 @@ only an explicit wallet save persists an image.
 ## Workspace settings
 
 Migration 012 adds `theme` and a complete `sidebar_order` permutation to users.
+Migration 014 expands the permutation to six features by inserting spending
+comparisons after Summary without reordering existing features or resetting preferences.
 The settings API derives ownership from the verified subject; successful reads
 of absent rows return light/default order without provisioning. A settings save
 atomically upserts only preference columns, preserving names, images and financial

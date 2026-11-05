@@ -149,11 +149,13 @@ profile access and links to wallets, categories, and transactions, not an
 analytics or balance summary. Unexpected rendering failures offer retry/home
 actions; expected API failures remain explicit within their page.
 
-`/dashboard`, `/wallets`, `/transactions`, `/summary`, `/categories`, `/account`, and `/settings` share the `(app)`
+`/dashboard`, `/wallets`, `/transactions`, `/summary`, `/compare-spending`, `/categories`, `/account`, and `/settings` share the `(app)`
 route-group layout and sidebar.
 Navigation highlights the current page and stays visible across private pages.
-Desktop uses a sticky left rail; phones use a compact sticky header with all five
+Desktop uses a sticky left rail; phones use a compact sticky header with all six
 navigation destinations visible and the account menu beside the wordmark.
+Narrow phones arrange navigation in two rows of three; wider mobile screens use
+one row of six.
 A bottom desktop profile footer shows the
 saved image/icon, name, and session email when available. Its keyboard-accessible
 three-dot menu opens **Manage account**, **Settings**, and **Sign out**. Profile image controls
@@ -166,7 +168,7 @@ session; the shared layout is not an authorization boundary.
 ### Workspace settings
 
 Open **Settings** from the account menu to choose **Light** or **Dark** and move
-sidebar features up/down with labelled, keyboard-accessible buttons. All five
+sidebar features up/down with labelled, keyboard-accessible buttons. All six
 features remain available; the account menu stays fixed. Changes apply only
 after **Save settings**, to both desktop and mobile navigation. Failed saves
 keep the edited theme/order and show an explicit error without changing the
@@ -442,6 +444,12 @@ charts retain their existing scale. Rankings remain descending net expenses,
 not absolute spending. Refunds reduce expense totals and increase net income
 and wallet balances; exact signed values remain available in tables/tooltips.
 
+### Spending comparisons
+
+The dedicated **Compare spending** sidebar entry opens `/compare-spending`,
+separate from annual Summary charts and tables. Its page independently requires
+a session and initializes selectors from the current UTC date without fetching
+annual analysis or comparison results.
 **Compare spending** selects 2–6 months, years, or yearly averages.
 Add/remove periods, then explicitly submit **Compare periods**. The independently
 session-checked action invokes the read-only comparison API; API tokens never
@@ -451,13 +459,20 @@ plus currency totals. Series follow the legend's order rather than relying only
 on color. All compared categories share a scale within their own currency.
 The keyboard-scrollable table remains available without hover.
 Failed requests preserve the edited selectors and clearly labelled last-successful
-results; changing the annual page year resets this comparison workspace.
+results; reopening the comparison page starts a new workspace independent of
+the Summary year.
 Yearly averages have **From year / To year** controls. Each range includes both
 endpoints: sum its due expenses and divide by its number of calendar years,
 including zero-spend years. A range may end this year but not in a future year;
 the current year is partial and is not annualized. Legends expose the year
 denominator and partial-year status. They round once to 18 places;
 ordinary sums never round. See [the exact contract](../docs/API.md#charts-and-period-comparisons).
+
+Migration `014_comparison_navigation.sql` adds the comparison feature after
+Summary in saved sidebar orders, preserving other feature ordering, theme, and
+profile preferences. Apply it with `make migrate`.
+
+### Annual analysis tables
 
 Expense tables are followed by income tables. Each family has one shadcn table
 per currency, showing categories/subcategories down the first
@@ -472,7 +487,7 @@ Entries directly assigned to a main category appear as **Without subcategory**.
 
 The named/focusable scroll region keeps the category column and month headers
 visible while scrolling horizontally/vertically. The mobile navigation retains
-five accessible targets, with truncated long labels on the narrowest widths.
+six accessible targets, with truncated long labels on the narrowest widths.
 Exact amounts and currency symbols are displayed without browser arithmetic,
 rounding, or mixing currencies. Only each family's entries due through today's UTC
 date are included; transfers and future initial entries are excluded. Income-only

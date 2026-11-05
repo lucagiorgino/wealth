@@ -395,7 +395,8 @@ Income-only currencies remain visible. Use their
 relative, not currency; very small amounts can be invisible in plots while
 remaining exact in data tables. Each currency is separate.
 
-In **Compare spending**, choose Months, Years, or Yearly averages, select 2–6
+Open the dedicated **Compare spending** sidebar entry (`/compare-spending`),
+separate from Summary. Choose Months, Years, or Yearly averages, select 2–6
 distinct periods, and press **Compare periods**. Add/remove controls change the
 selection; results are fetched only on submission. Current periods are partial;
 future periods are refused. Yearly averages use inclusive **From year / To year**
@@ -407,7 +408,13 @@ All categories and currency totals appear in the comparison table even
 when the chart displays only the eight highest-ranked categories.
 Failures keep selectors and the labelled last successful results, not fake zeros.
 
-No migration is required. The chart feature adds Recharts through the shadcn
+Apply `014_comparison_navigation.sql` with `make migrate` for the sixth sidebar
+feature. Existing orders receive Compare spending immediately after Summary;
+other feature ordering, themes, profiles, and financial records are preserved.
+The comparison page starts from the current UTC date and fetches results only
+when submitted, independently of Summary's selected year.
+
+The chart feature adds Recharts through the shadcn
 registry; run `make local-dev-up` once when receiving that dependency change.
 Subsequent ordinary source edits still require only a browser refresh.
 

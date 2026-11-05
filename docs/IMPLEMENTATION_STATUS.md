@@ -29,6 +29,7 @@
 | Separate year/month controls, exact currency-labelled amounts, whole-filter summaries and collapsed wallet expenses | Transaction listing schemas/query, `transaction-summary.jsx`, `money-amount.jsx`; database summary/recurrence, adapter and browser tests |
 | Private annual expense/income analysis, monthly/yearly category/subcategory tables, grouped monthly bars and diverging net bars | `app/api/summary.py`, `app/services/summary.py`, `app/db/summary.py`, `app/schemas/summary.py`, `/summary`, `expense-summary.jsx`, `expense-charts.jsx`; database, adapter and browser tests |
 | Shadcn category-ranking/monthly-trend charts and 2–6-period month/year/yearly-range-average comparisons | `app/db/expense_comparisons.py`, Summary schemas/services/routes, `expense-charts.jsx`, `expense-comparison.jsx`, registry Chart/Recharts; exact geometry/rounding, private transport, and browser comparison tests |
+| Dedicated Compare spending page and reorderable sixth sidebar entry | `/compare-spending`, independently authenticated page/action, migration `014_comparison_navigation.sql`; saved-order migration, settings, private-route and responsive comparison browser tests |
 | Server-side SDK token renewal, rotated-cookie persistence, safe reauthentication and retryable provider failures | `frontend/lib/auth0.js`, `auth-errors.js`, `api.js`, `proxy.js`; typed-error unit tests and synthetic-provider `token-refresh.spec.js` |
 | Reviewed CSV transaction import with mapping, approved missing-record creation, exact amount/date normalization, row corrections/exclusion, and atomic safe-retry confirmation | `app/services/transaction_imports.py`, `app/services/import_formats.py`, `app/db/transaction_imports.py`, `006_transaction_imports.sql`, import dialog/actions; API/database, adapter, and CSV browser tests |
 | API token origin/cache/response boundaries                                                                                     | `frontend/tests/config.test.js`, `frontend/tests/api-client.test.js`                                                                                                                                    |
@@ -491,7 +492,7 @@ erDiagram
         varchar(32) icon "Profile icon, default user-round"
         bytea avatar_png "Nullable normalized PNG, 1 through 327680 bytes"
         varchar(5) theme "light default or dark"
-        text[] sidebar_order "All five feature IDs exactly once, default application order"
+        text[] sidebar_order "All six feature IDs exactly once, default application order"
     }
     wallets {
         uuid id PK "Generated UUID, also composite unique with owner"
@@ -633,7 +634,7 @@ persisted, and no receipt exists for upload, validation, or cancellation.
 flowchart LR
     Welcome["Public welcome /"] -->|"Sign in through Auth0"| Dashboard["Landing dashboard /dashboard"]
     subgraph Shell["Shared private layout: desktop rail or compact sticky mobile header"]
-        Sidebar["Five features in saved order; fixed account menu and sign-out"]
+        Sidebar["Six features in saved order; fixed account menu and sign-out"]
         Dashboard <-->|"Sidebar navigation"| Wallets["Wallets /wallets?page=N"]
         Sidebar <-->|"Manage account"| Account["Account /account and icon-or-image profile picture"]
         Sidebar <-->|"Settings"| Settings["Settings /settings: light or dark and feature ordering"]
@@ -645,6 +646,7 @@ flowchart LR
         Sidebar --- Categories
         Sidebar --- Transactions
         Sidebar --- Summary["Annual expense and income analysis /summary?year=N"]
+        Sidebar --- Comparison["Compare spending /compare-spending"]
     end
     Dashboard -->|"Server-only request"| Profile["GET /api/v1/account"]
     Account -->|"Server-only request"| Profile
@@ -658,7 +660,7 @@ flowchart LR
     Categories -->|"Server-only requests and session-checked actions"| CategoryAPI["Private category CRUD and optional preset imports"]
     Transactions -->|"Server-only filtered listing and session-checked actions"| TransactionAPI["Private transaction CRUD, recurrence, and wallet options"]
     Summary -->|"Server-only request"| SummaryAPI["GET /api/v1/summary/analysis?year=N"]
-    Summary -->|"Independently session-checked read-only action"| CompareAPI["POST /api/v1/summary/compare"]
+    Comparison -->|"Independently session-checked read-only action"| CompareAPI["POST /api/v1/summary/compare"]
 ```
 
 Each private page and server action enforce sessions independently of the
@@ -704,9 +706,11 @@ flowchart LR
         AnalysisUI["Annual expense tables followed by income tables, by currency; year navigation and expandable category details"]
         Frontend -->|"Exact monthly/yearly aggregates, no raw financial rows"| AnalysisUI
         AnalysisUI -->|"URL year selection"| Frontend
-        ChartsUI["Compact responsive chart cards with native view selectors; January-December exact totals; bar/donut expense ranking with Sum/Average; period comparisons"]
+        ChartsUI["Summary: compact responsive chart cards with native view selectors; January-December exact totals; bar/donut expense ranking with Sum/Average"]
         Frontend -->|"Exact amount strings and dimensionless geometry"| ChartsUI
-        ChartsUI -->|"Session-checked read-only period comparison"| Frontend
+        ComparisonUI["Dedicated Compare spending page with period controls, grouped bars and exact tables"]
+        Frontend -->|"Independently authenticated page; current UTC defaults"| ComparisonUI
+        ComparisonUI -->|"Session-checked read-only period comparison"| Frontend
     end
     Browser <-->|"Provider sign-in"| Auth0["Auth0"]
     FontBuild -->|"Build-time HTTPS font download only"| FontSource["Google Fonts"]
@@ -1004,7 +1008,7 @@ sequenceDiagram
     Browser->>Web: Settings server action
     Web->>Web: Independently require session and validate complete order
     Web->>API: PUT /api/v1/settings with both preferences
-    API->>API: Validate light/dark, all five unique IDs and no extra fields
+    API->>API: Validate light/dark, all six unique IDs and no extra fields
     API->>DB: Atomic verified-subject upsert of preference columns only
     Note over DB: Preserve display name, image and all financial records
     DB-->>API: Saved settings
@@ -1531,11 +1535,15 @@ sequenceDiagram
 sequenceDiagram
     actor User
     participant UI as Shadcn charts and comparison controls
+    participant Page as Next.js Compare spending page
     participant Action as Next.js read-only comparison action
     participant API as FastAPI summary service
     participant DB as PostgreSQL
     User->>UI: Switch monthly or category chart using labelled native selects
     UI-->>User: Update compact responsive plot locally, preserving exact data
+    User->>Page: Open Compare spending from its dedicated sidebar link
+    Page->>Page: Independently require session and derive current UTC date
+    Page-->>UI: Initial period selectors, no annual analysis fetch
     User->>UI: Select 2-6 months, years, or inclusive yearly-average ranges
     User->>UI: Compare periods
     UI->>Action: Closed same-kind selections, no owner or monetary inputs

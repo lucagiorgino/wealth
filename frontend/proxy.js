@@ -11,6 +11,7 @@ export async function proxy(request) {
       request.nextUrl.pathname.startsWith("/wallets") ||
       request.nextUrl.pathname.startsWith("/transactions") ||
       request.nextUrl.pathname.startsWith("/summary") ||
+      request.nextUrl.pathname.startsWith("/compare-spending") ||
       request.nextUrl.pathname.startsWith("/account") ||
       request.nextUrl.pathname.startsWith("/categories")
     ) {

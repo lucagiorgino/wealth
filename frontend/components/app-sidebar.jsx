@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import {
   ArrowLeftRight,
   ChartNoAxesColumn,
+  ChartNoAxesCombined,
   LayoutDashboard,
   LockKeyhole,
   Tags,
@@ -18,6 +19,7 @@ const icons = {
   wallets: Wallet,
   transactions: ArrowLeftRight,
   summary: ChartNoAxesColumn,
+  comparison: ChartNoAxesCombined,
   categories: Tags,
 };
 
@@ -51,7 +53,7 @@ export function AppSidebar({
       </Link>
       <nav
         aria-label="Main navigation"
-        className="col-span-2 row-start-2 grid grid-cols-5 gap-1 md:flex md:flex-col md:gap-1.5"
+        className="col-span-2 row-start-2 grid grid-cols-3 gap-1 sm:grid-cols-6 md:flex md:flex-col md:gap-1.5"
       >
         <p className="mb-2 hidden px-3 text-[10px] font-semibold tracking-widest text-muted-foreground uppercase md:block">
           Workspace

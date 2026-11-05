@@ -370,10 +370,27 @@ test("yearly expense tables show exact category and subcategory totals, collapse
   await expect(
     charts.locator(".recharts-tooltip-wrapper").filter({ hasText: high }),
   ).toBeVisible();
+  await expect(
+    page.getByRole("form", { name: "Expense comparison", exact: true }),
+  ).toHaveCount(0);
+  const comparisonLink = page
+    .getByRole("navigation", { name: "Main navigation" })
+    .getByRole("link", { name: "Compare spending", exact: true });
+  await comparisonLink.click();
+  await expect(page).toHaveURL("/compare-spending");
+  await expect(comparisonLink).toHaveAttribute("aria-current", "page");
+  await expect(
+    page.getByRole("heading", { name: "Compare spending", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("region", { name: "Spending charts", exact: true }),
+  ).toHaveCount(0);
   const comparisonForm = page.getByRole("form", {
     name: "Expense comparison",
     exact: true,
   });
+  await comparisonForm.getByLabel("Year 1", { exact: true }).fill("2024");
+  await comparisonForm.getByLabel("Year 2", { exact: true }).fill("2024");
   await comparisonForm.getByLabel("Month 1", { exact: true }).selectOption("1");
   await comparisonForm.getByLabel("Month 2", { exact: true }).selectOption("2");
   await comparisonForm
@@ -437,6 +454,8 @@ test("yearly expense tables show exact category and subcategory totals, collapse
   await comparisonForm
     .getByLabel("Compare", { exact: true })
     .selectOption("year");
+  await comparisonForm.getByLabel("Year 1", { exact: true }).fill("2024");
+  await comparisonForm.getByLabel("Year 2", { exact: true }).fill("2023");
   await comparisonForm
     .getByRole("button", { name: "Compare periods", exact: true })
     .click();
@@ -490,6 +509,49 @@ test("yearly expense tables show exact category and subcategory totals, collapse
       .getByRole("list", { name: "EUR comparison legend", exact: true })
       .getByRole("listitem"),
   ).toHaveCount(6);
+  await page.evaluate(() => document.documentElement.classList.add("dark"));
+  await assertReadableCharts(page);
+  await expect(
+    page.getByRole("img", {
+      name: "EUR selected-period category comparison, relative expense scale",
+      exact: true,
+    }),
+  ).toBeVisible();
+  await page.screenshot({
+    path: testInfo.outputPath("compare-spending-dark.png"),
+    fullPage: true,
+  });
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.setViewportSize({ width: 375, height: 812 });
+  const comparisonScroll = page.getByRole("region", {
+    name: "EUR comparison table, scroll horizontally",
+    exact: true,
+  });
+  await comparisonScroll.focus();
+  await page.keyboard.press("ArrowRight");
+  await expect
+    .poll(() => comparisonScroll.evaluate((element) => element.scrollLeft))
+    .toBeGreaterThan(0);
+  await expect(
+    comparisonForm.getByRole("button", {
+      name: "Compare periods",
+      exact: true,
+    }),
+  ).toBeVisible();
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+  ).toBe(true);
+  await page.screenshot({
+    path: testInfo.outputPath("compare-spending-mobile.png"),
+    fullPage: true,
+  });
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await page.goto("/summary?year=2024");
+  await charts
+    .getByRole("button", { name: "View category ranking data", exact: true })
+    .click();
   await expect(euro.getByRole("columnheader")).toHaveCount(14);
   await expect(
     euro.getByRole("columnheader", { name: "January", exact: true }),
@@ -577,11 +639,6 @@ test("yearly expense tables show exact category and subcategory totals, collapse
   await page.evaluate(() => document.documentElement.classList.add("dark"));
   await charts.getByLabel("Category chart view").selectOption("donut");
   await assertReadableCharts(page);
-  const comparisonImage = page.getByRole("img", {
-    name: "EUR selected-period category comparison, relative expense scale",
-    exact: true,
-  });
-  await expect(comparisonImage).toBeVisible();
   await page.screenshot({
     path: testInfo.outputPath("summary-expanded-dark.png"),
     fullPage: true,
@@ -604,21 +661,6 @@ test("yearly expense tables show exact category and subcategory totals, collapse
   await expect
     .poll(() => chartDataScroll.evaluate((element) => element.scrollLeft))
     .toBeGreaterThan(0);
-  const comparisonScroll = page.getByRole("region", {
-    name: "EUR comparison table, scroll horizontally",
-    exact: true,
-  });
-  await comparisonScroll.focus();
-  await page.keyboard.press("ArrowRight");
-  await expect
-    .poll(() => comparisonScroll.evaluate((element) => element.scrollLeft))
-    .toBeGreaterThan(0);
-  await expect(
-    comparisonForm.getByRole("button", {
-      name: "Compare periods",
-      exact: true,
-    }),
-  ).toBeVisible();
   const scroll = page.getByRole("region", {
     name: "EUR expense table, scroll horizontally",
     exact: true,

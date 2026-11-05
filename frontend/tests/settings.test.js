@@ -36,6 +36,7 @@ test("settings payload preserves the chosen theme and complete feature order", (
         "transactions",
         "summary",
         "summary",
+        "categories",
       ],
     },
     {
@@ -45,6 +46,7 @@ test("settings payload preserves the chosen theme and complete feature order", (
         "wallets",
         "transactions",
         "summary",
+        "comparison",
         "account",
       ],
     },
@@ -82,7 +84,7 @@ test("settings transport is authenticated, uncached and validates read/write res
       null,
       {},
       { ...settings, theme: "system" },
-      { ...settings, sidebar_order: Array(5).fill("dashboard") },
+      { ...settings, sidebar_order: Array(6).fill("dashboard") },
       {
         ...settings,
         sidebar_order: [
@@ -91,6 +93,7 @@ test("settings transport is authenticated, uncached and validates read/write res
           "transactions",
           "summary",
           "summary",
+          "categories",
         ],
       },
     ]) {

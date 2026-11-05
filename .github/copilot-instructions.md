@@ -2,7 +2,7 @@
 
 Wealth is a web application for tracking expenses, income, and personal assets.
 The application provides health/readiness endpoints, external authentication,
-and SSR dashboard, paginated wallets/transactions, annual expense analysis,
+and SSR dashboard, paginated wallets/transactions, annual expense analysis, spending comparisons,
 account profile, and category pages. Users can
 manage their own currency-denominated wallets with computed current balances,
 manage a Wealth display name/icon/custom image, and customize

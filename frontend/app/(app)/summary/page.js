@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { connection } from "next/server";
 import { ExpenseCharts } from "@/components/expense-charts";
-import { ExpenseComparison } from "@/components/expense-comparison";
 import {
   ExpenseSummaryTables,
   SummaryYear,
@@ -58,11 +57,6 @@ export default async function Summary({ searchParams }) {
       ) : (
         <>
           <ExpenseCharts charts={result.charts} />
-          <ExpenseComparison
-            key={`comparison-${year}`}
-            year={year}
-            asOf={result.summary.as_of}
-          />
           <ExpenseSummaryTables key={year} summary={result.summary} />
           <ExpenseSummaryTables
             key={`income-${year}`}

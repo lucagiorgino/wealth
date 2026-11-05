@@ -47,6 +47,7 @@ test("account settings persist theme and keyboard-accessible desktop/mobile navi
     "Dashboard",
     "Wallets",
     "Summary",
+    "Compare spending",
     "Categories",
   ];
   await expect(features.getByRole("listitem").first()).toContainText(

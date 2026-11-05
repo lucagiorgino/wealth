@@ -2,11 +2,13 @@ import asyncio
 import base64
 import os
 from io import BytesIO
+from pathlib import Path
 from uuid import uuid4
 
 import psycopg
 import pytest
 from PIL import Image, PngImagePlugin
+from psycopg import sql
 
 from app.core.auth import require_identity
 from app.core.config import get_settings
@@ -18,7 +20,14 @@ from app.services.profile_images import MAX_UPLOAD_BYTES
 PROFILE = {"display_name": "Alex", "icon": "cat"}
 PREFERENCES = {
     "theme": "light",
-    "sidebar_order": ["dashboard", "wallets", "transactions", "summary", "categories"],
+    "sidebar_order": [
+        "dashboard",
+        "wallets",
+        "transactions",
+        "summary",
+        "comparison",
+        "categories",
+    ],
 }
 
 
@@ -430,13 +439,32 @@ def test_settings_require_authentication(client, method):
         {"theme": "system"},
         {"theme": None},
         {"theme": 1},
-        {"sidebar_order": ["dashboard"] * 5},
-        {"sidebar_order": ["dashboard", "wallets", "transactions", "summary", "account"]},
+        {"sidebar_order": ["dashboard"] * 6},
+        {
+            "sidebar_order": [
+                "dashboard",
+                "wallets",
+                "transactions",
+                "summary",
+                "comparison",
+                "account",
+            ]
+        },
+        {
+            "sidebar_order": [
+                "dashboard",
+                "wallets",
+                "transactions",
+                "summary",
+                "summary",
+                "categories",
+            ]
+        },
         {"sidebar_order": PREFERENCES["sidebar_order"][:-1]},
         {"sidebar_order": [*PREFERENCES["sidebar_order"], "dashboard"]},
         {"sidebar_order": "dashboard,wallets,transactions,summary,categories"},
         {"sidebar_order": None},
-        {"sidebar_order": [None, "wallets", "transactions", "summary", "categories"]},
+        {"sidebar_order": [None, "wallets", "transactions", "summary", "comparison", "categories"]},
         {"subject": "another-owner"},
         {"owner_subject": "another-owner"},
     ],
@@ -519,7 +547,7 @@ def test_settings_persist_per_owner_without_changing_profiles_or_wallets(account
         async with database_connection() as connection:
             for theme, order in [
                 ("other", PREFERENCES["sidebar_order"]),
-                ("light", ["dashboard"] * 5),
+                ("light", ["dashboard"] * 6),
                 ("dark", PREFERENCES["sidebar_order"][:-1]),
                 ("dark", [["dashboard", "wallets", "transactions", "summary", "categories"]]),
             ]:
@@ -531,3 +559,49 @@ def test_settings_persist_per_owner_without_changing_profiles_or_wallets(account
                         )
 
     asyncio.run(check_constraints())
+
+
+@pytest.mark.integration
+def test_comparison_navigation_migration_preserves_saved_order_and_preferences(account_database):
+    async def check():
+        async with database_connection() as connection:
+            schema = sql.Identifier(f"test_comparison_navigation_{uuid4().hex}")
+            await connection.execute(sql.SQL("CREATE SCHEMA {}").format(schema))
+            await connection.execute(sql.SQL("SET LOCAL search_path TO {}").format(schema))
+            migrations = Path(__file__).resolve().parents[1] / "app/db/migrations"
+            for path in sorted(migrations.glob("*.sql")):
+                if path.name < "014_comparison_navigation.sql":
+                    await connection.execute(path.read_text())
+            orders = [
+                ["dashboard", "wallets", "transactions", "summary", "categories"],
+                ["summary", "categories", "transactions", "wallets", "dashboard"],
+                ["categories", "wallets", "dashboard", "transactions", "summary"],
+            ]
+            for index, order in enumerate(orders):
+                await connection.execute(
+                    "INSERT INTO users (subject, display_name, theme, sidebar_order) "
+                    "VALUES (%s, 'Saved name', 'dark', %s)",
+                    (str(index), order),
+                )
+            await connection.execute((migrations / "014_comparison_navigation.sql").read_text())
+            cursor = await connection.execute(
+                "SELECT subject, display_name, theme, sidebar_order FROM users ORDER BY subject"
+            )
+            for row, order in zip(await cursor.fetchall(), orders, strict=True):
+                position = order.index("summary") + 1
+                assert row["sidebar_order"] == order[:position] + ["comparison"] + order[position:]
+                assert row["theme"] == "dark"
+                assert row["display_name"] == "Saved name"
+            cursor = await connection.execute(
+                "INSERT INTO users (subject) VALUES ('new') RETURNING sidebar_order"
+            )
+            assert (await cursor.fetchone())["sidebar_order"] == PREFERENCES["sidebar_order"]
+            with pytest.raises(psycopg.errors.CheckViolation):
+                async with connection.transaction():
+                    await connection.execute(
+                        "UPDATE users SET sidebar_order = %s WHERE subject = 'new'",
+                        (orders[0],),
+                    )
+            await connection.execute(sql.SQL("DROP SCHEMA {} CASCADE").format(schema))
+
+    asyncio.run(check())

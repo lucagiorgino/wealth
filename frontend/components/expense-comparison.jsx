@@ -10,7 +10,7 @@ import {
   YAxis,
 } from "recharts";
 import { Plus, X } from "lucide-react";
-import { compareExpensesAction } from "@/app/(app)/summary/actions";
+import { compareExpensesAction } from "@/app/(app)/compare-spending/actions";
 import { relativeScale, shortLabel } from "@/components/expense-charts";
 import { Feedback } from "@/components/feedback";
 import { MoneyAmount } from "@/components/money-amount";
@@ -332,9 +332,7 @@ export function ExpenseComparison({ year, asOf }) {
   return (
     <section aria-label="Compare spending" className="min-w-0 space-y-4">
       <div>
-        <h2 className="text-xl font-semibold tracking-tight">
-          Compare spending
-        </h2>
+        <h2 className="text-xl font-semibold tracking-tight">Choose periods</h2>
         <p className="mt-1 text-sm text-muted-foreground">
           Choose two to six months, years, or yearly averages over year ranges.
           Compare like-for-like periods in separate currencies.

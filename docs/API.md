@@ -67,15 +67,18 @@ financial records or a local account have been provisioned.
 ```json
 {
   "theme": "light",
-  "sidebar_order": ["dashboard", "wallets", "transactions", "summary", "categories"]
+  "sidebar_order": ["dashboard", "wallets", "transactions", "summary", "comparison", "categories"]
 }
 ```
 
 `PUT /api/v1/settings` requires both fields and returns the saved object.
-`theme` is exactly `light` or `dark`. `sidebar_order` must contain all five
+`theme` is exactly `light` or `dark`. `sidebar_order` must contain all six
 listed IDs exactly once, in the requested display order. Missing, duplicate,
 unknown or extra fields (including owner/subject IDs) return 422.
 The account menu remains fixed outside the reordered functionality list.
+`comparison` opens the dedicated `/compare-spending` page. Migration 014 inserts
+it immediately after Summary in existing saved orders, preserving the relative
+order of the other features and all other preferences.
 
 Ownership comes exclusively from the verified token subject. Reads return the
 above defaults only after a successful database read and do not provision users.
