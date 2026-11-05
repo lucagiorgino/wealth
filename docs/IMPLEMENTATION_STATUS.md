@@ -706,8 +706,8 @@ flowchart LR
         AnalysisUI["Annual expense tables followed by income tables, by currency; year navigation and expandable category details"]
         Frontend -->|"Exact monthly/yearly aggregates, no raw financial rows"| AnalysisUI
         AnalysisUI -->|"URL year selection"| Frontend
-        ChartsUI["Summary: compact responsive chart cards with native view selectors; January-December exact totals; bar/donut expense ranking with Sum/Average"]
-        Frontend -->|"Exact amount strings and dimensionless geometry"| ChartsUI
+        ChartsUI["Summary: aligned 240px plots, title-right toggles and colored tooltips; monthly currency axes; bar/donut ranking with exact data"]
+        Frontend -->|"Exact amount strings, monetary tick labels and dimensionless geometry"| ChartsUI
         ComparisonUI["Dedicated Compare spending page with period controls, grouped bars and exact tables"]
         Frontend -->|"Independently authenticated page; current UTC defaults"| ComparisonUI
         ComparisonUI -->|"Session-checked read-only period comparison"| Frontend
@@ -1539,8 +1539,9 @@ sequenceDiagram
     participant Action as Next.js read-only comparison action
     participant API as FastAPI summary service
     participant DB as PostgreSQL
-    User->>UI: Switch monthly or category chart using labelled native selects
-    UI-->>User: Update compact responsive plot locally, preserving exact data
+    User->>UI: Switch monthly or category chart with title-right icon toggles
+    UI-->>User: Update aligned equal-height plot locally, preserving exact data
+    Note over User,UI: Monthly currency ticks are server-generated; tooltip indicators match series/slice colors
     User->>Page: Open Compare spending from its dedicated sidebar link
     Page->>Page: Independently require session and derive current UTC date
     Page-->>UI: Initial period selectors, no annual analysis fetch
@@ -1569,7 +1570,7 @@ sequenceDiagram
         Action-->>UI: Explicit error
         UI-->>User: Preserve edits and labelled last-successful comparison
     end
-    Note over User,UI: Chart axes are relative; tooltips and tables retain amounts without JavaScript monetary conversion
+    Note over User,UI: Category/comparison axes are relative; monthly axes use currency labels; exact amounts never become JavaScript numbers
     Note over Action,DB: No mutation, revalidation, provisioning, migration or stored aggregates
 ```
 

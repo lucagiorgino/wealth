@@ -52,6 +52,12 @@ class CashFlowTotals(BaseModel):
     net: Decimal
 
 
+class MoneyAxisTick(BaseModel):
+    value: int = Field(ge=-10000, le=10000)
+    amount: Decimal
+    label: str
+
+
 class CurrencyCharts(BaseModel):
     currency: str
     ranking: list[PlotPoint]
@@ -61,6 +67,8 @@ class CurrencyCharts(BaseModel):
     trend: list[PlotPoint]
     income_trend: list[PlotPoint]
     net_trend: list[PlotPoint]
+    cashflow_ticks: list[MoneyAxisTick]
+    net_ticks: list[MoneyAxisTick]
 
 
 class ExpenseAnalysis(BaseModel):

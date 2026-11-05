@@ -131,14 +131,14 @@ test("negative expense creation, editing and charts preserve exact values and is
   ).toHaveAttribute("stroke-width", "1.5");
   await expect(page.getByText("-100%", { exact: true }).first()).toBeVisible();
   await expect(
-    page.getByRole("option", { name: "Donut chart", exact: true }),
+    page.getByRole("button", { name: "Donut chart", exact: true }),
   ).toBeDisabled();
   await expect(
     page.getByText(/Donut view requires nonnegative category totals/),
-  ).toBeVisible();
+  ).toHaveClass("sr-only");
   await page
-    .getByLabel("Monthly chart view", { exact: true })
-    .selectOption("net");
+    .getByRole("button", { name: "Monthly net income", exact: true })
+    .click();
   const netChart = page.getByRole("img", { name: /EUR monthly net income/ });
   const positiveBar = netChart.locator(".recharts-bar-rectangle path").first();
   await expect(positiveBar).toBeVisible();
@@ -149,6 +149,10 @@ test("negative expense creation, editing and charts preserve exact values and is
   expect(positiveBounds.y + positiveBounds.height).toBeLessThanOrEqual(
     zeroBounds.y + 1,
   );
+  await page
+    .getByRole("navigation", { name: "Main navigation", exact: true })
+    .getByRole("link", { name: "Compare spending", exact: true })
+    .click();
   const comparisonForm = page.getByRole("form", {
     name: "Expense comparison",
     exact: true,

@@ -15,6 +15,7 @@ from app.schemas.summary import (
     ExpenseComparison,
     ExpenseComparisonInput,
     ExpenseSummary,
+    MoneyAxisTick,
     PlotPoint,
 )
 
@@ -62,6 +63,23 @@ def chart_aggregates(amounts: list[Decimal]) -> tuple[Decimal, Decimal]:
         rounded = quotient + (remainder * 2 >= ratio.denominator)
         average = Decimal(rounded if ratio >= 0 else -rounded).scaleb(-18)
     return total, average
+
+
+def money_axis_ticks(maximum: Decimal, signed: bool) -> list[MoneyAxisTick]:
+    maximum = maximum.copy_abs() or Decimal(1)
+    with localcontext() as context:
+        context.prec = len(maximum.as_tuple().digits) + 2
+        half = maximum / 2
+    amounts = [(0, Decimal(0)), (5000, half), (10000, maximum)]
+    if signed:
+        amounts = [(-10000, maximum.copy_negate()), (-5000, half.copy_negate()), *amounts]
+    ticks = []
+    for value, amount in amounts:
+        label = format(amount, ".3g")
+        if -4 <= amount.adjusted() < 6:
+            label = format(Decimal(label), "f")
+        ticks.append(MoneyAxisTick(value=value, amount=amount, label=label))
+    return ticks
 
 
 def expense_charts(
@@ -115,6 +133,10 @@ def expense_charts(
                 trend=monthly_points(expense_months, maximum),
                 income_trend=monthly_points(income_months, maximum),
                 net_trend=monthly_points(net),
+                cashflow_ticks=money_axis_ticks(
+                    maximum, any(amount < 0 for amount in expense_months)
+                ),
+                net_ticks=money_axis_ticks(max(amount.copy_abs() for amount in net), True),
             )
         )
     return charts

@@ -800,6 +800,28 @@ function validatePlotPoints(points, keys) {
   }));
 }
 
+function validateMoneyAxisTicks(ticks, signed) {
+  const coordinates = signed
+    ? [-10000, -5000, 0, 5000, 10000]
+    : [0, 5000, 10000];
+  if (
+    !Array.isArray(ticks) ||
+    ticks.length !== coordinates.length ||
+    ticks.some(
+      (tick, index) =>
+        tick?.value !== coordinates[index] ||
+        typeof tick.amount !== "string" ||
+        !decimalAmount.test(tick.amount) ||
+        typeof tick.label !== "string" ||
+        !decimalAmount.test(tick.label),
+    )
+  ) {
+    console.error("Backend returned invalid monetary axis ticks");
+    throw new BackendError(502);
+  }
+  return ticks.map(({ value, amount, label }) => ({ value, amount, label }));
+}
+
 export async function fetchExpenseAnalysis(options, year) {
   summaryYear(String(year));
   const data = await backendRequest({
@@ -912,6 +934,11 @@ export async function fetchExpenseAnalysis(options, year) {
         trend,
         income_trend,
         net_trend,
+        cashflow_ticks: validateMoneyAxisTicks(
+          item.cashflow_ticks,
+          trend.some((point) => point.amount.startsWith("-")),
+        ),
+        net_ticks: validateMoneyAxisTicks(item.net_ticks, true),
       };
     }),
   };

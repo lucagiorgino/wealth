@@ -2,6 +2,12 @@
 
 import { useId, useState } from "react";
 import {
+  ChartBar,
+  ChartColumn,
+  ChartColumnIncreasing,
+  ChartPie,
+} from "lucide-react";
+import {
   Bar,
   BarChart,
   CartesianGrid,
@@ -14,15 +20,10 @@ import {
 } from "recharts";
 import { MoneyAmount } from "@/components/money-amount";
 import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
-import {
-  NativeSelect,
-  NativeSelectOption,
-} from "@/components/ui/native-select";
 import {
   Card,
+  CardAction,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
@@ -60,6 +61,46 @@ export const relativeScale = (negative) => ({
   axisLine: false,
   tick: { fill: "var(--muted-foreground)" },
 });
+
+function ChartViewToggle({ label, value, onChange, options }) {
+  return (
+    <div role="group" aria-label={label} className="flex gap-1">
+      {options.map(
+        ({ value: option, label, icon: Icon, disabled, description }) => (
+          <Button
+            key={option}
+            type="button"
+            size="icon"
+            variant={value === option ? "secondary" : "ghost"}
+            aria-label={label}
+            title={label}
+            aria-pressed={value === option}
+            aria-describedby={description}
+            disabled={disabled}
+            onClick={() => onChange(option)}
+          >
+            <Icon aria-hidden="true" />
+          </Button>
+        ),
+      )}
+    </div>
+  );
+}
+
+function ExactTooltipValue({ color, label, amount, currency }) {
+  return (
+    <span className="flex w-full flex-wrap items-center gap-2">
+      <span
+        aria-hidden="true"
+        data-slot="chart-tooltip-indicator"
+        className="size-2.5 shrink-0 rounded-sm"
+        style={{ backgroundColor: color }}
+      />
+      {label && <span>{label}</span>}
+      <MoneyAmount amount={amount} currency={currency} />
+    </span>
+  );
+}
 
 function ExactChartData({ points, currency, title, sum, average }) {
   return (
@@ -120,7 +161,7 @@ function ExactChartData({ points, currency, title, sum, average }) {
 function AnnualChart({ item }) {
   const { ranking: points, currency } = item;
   const [view, setView] = useState("bar");
-  const viewId = useId();
+  const unavailableId = useId();
   const negative = points.some(
     (point) => point.value < 0 || point.amount.startsWith("-"),
   );
@@ -137,8 +178,12 @@ function AnnualChart({ item }) {
       content={
         <ChartTooltipContent
           labelFormatter={(_, payload) => payload[0]?.payload.label}
-          formatter={(_, __, item) => (
-            <MoneyAmount amount={item.payload.amount} currency={currency} />
+          formatter={(_, __, point) => (
+            <ExactTooltipValue
+              color={point.payload.fill ?? point.color}
+              amount={point.payload.amount}
+              currency={currency}
+            />
           )}
         />
       }
@@ -146,29 +191,29 @@ function AnnualChart({ item }) {
   );
   return (
     <Card size="sm" className="min-w-0">
-      <CardHeader>
-        <CardTitle>
+      <CardHeader className="min-h-11 items-center">
+        <CardTitle className="flex min-h-11 items-center">
           <h3>{title}</h3>
         </CardTitle>
-        <CardDescription>
-          Your 10 highest-spend categories. Sum and average cover these
-          displayed categories, not every category or a monthly average.
-        </CardDescription>
-        <div className="mt-2 max-w-sm space-y-2">
-          <Label htmlFor={viewId}>Category chart view</Label>
-          <NativeSelect
-            id={viewId}
+        <CardAction className="self-center">
+          <ChartViewToggle
+            label={`${currency} category chart view`}
             value={donut ? "donut" : "bar"}
-            onChange={(event) => setView(event.target.value)}
-          >
-            <NativeSelectOption value="bar">Bar chart</NativeSelectOption>
-            <NativeSelectOption value="donut" disabled={!donutAvailable}>
-              Donut chart
-            </NativeSelectOption>
-          </NativeSelect>
-        </div>
+            onChange={setView}
+            options={[
+              { value: "bar", label: "Bar chart", icon: ChartBar },
+              {
+                value: "donut",
+                label: "Donut chart",
+                icon: ChartPie,
+                disabled: !donutAvailable,
+                description: !donutAvailable ? unavailableId : undefined,
+              },
+            ]}
+          />
+        </CardAction>
         {!donutAvailable && (
-          <p className="text-sm text-muted-foreground">
+          <p id={unavailableId} className="sr-only">
             Donut view requires nonnegative category totals and at least one
             visible positive amount. Signed refunds remain in the bar chart.
           </p>
@@ -179,8 +224,7 @@ function AnnualChart({ item }) {
           config={config}
           role="img"
           aria-label={`${currency} ${title.toLowerCase()}, ${donut ? "donut share of displayed categories" : "relative expense scale"}`}
-          className="aspect-auto w-full"
-          style={{ height: Math.max(240, points.length * 26) }}
+          className="h-60 w-full aspect-auto"
         >
           {donut ? (
             <PieChart accessibilityLayer>
@@ -234,39 +278,6 @@ function AnnualChart({ item }) {
             </BarChart>
           )}
         </ChartContainer>
-        <p className="mt-3 text-xs text-muted-foreground">
-          {donut ? (
-            "Slices show the relative shares of the displayed categories. Very small amounts may not be visible. "
-          ) : (
-            <>
-              Relative scale: this chart’s largest{" "}
-              {negative ? "absolute magnitude" : "amount"} = 100%. Very small
-              amounts may not be visible.{" "}
-            </>
-          )}
-          Exact values are below and in tooltips.
-        </p>
-        {donut && (
-          <ul
-            aria-label={`${currency} donut categories`}
-            className="mt-3 flex flex-wrap gap-x-4 gap-y-2 text-sm"
-          >
-            {slices.map((point) => (
-              <li
-                key={point.key}
-                className="flex min-w-0 max-w-full flex-wrap items-center gap-2 [overflow-wrap:anywhere]"
-              >
-                <span
-                  aria-hidden="true"
-                  className="size-3 rounded-sm"
-                  style={{ backgroundColor: point.fill }}
-                />
-                {point.label}:{" "}
-                <MoneyAmount amount={point.amount} currency={currency} />
-              </li>
-            ))}
-          </ul>
-        )}
         <ExactChartData
           points={points}
           currency={currency}
@@ -285,7 +296,9 @@ const monthlyConfig = {
   net: { label: "Net income", color: "var(--income-foreground)" },
 };
 
-function MonthlyChart({ item, net = false }) {
+function MonthlyChart({ item }) {
+  const [view, setView] = useState("cashflow");
+  const net = view === "net";
   const title = net ? "Monthly net income" : "Monthly income and expenses";
   const rows = item.trend.map((point, index) => ({
     key: point.key,
@@ -296,31 +309,52 @@ function MonthlyChart({ item, net = false }) {
     incomeAmount: item.income_trend[index].amount,
     net: item.net_trend[index].value,
     netAmount: item.net_trend[index].amount,
+    ...(net && {
+      fill: item.net_trend[index].amount.startsWith("-")
+        ? "var(--expense-foreground)"
+        : "var(--income-foreground)",
+    }),
   }));
-  const negative =
-    net || rows.some((row) => row.expensesAmount.startsWith("-"));
+  const ticks = net ? item.net_ticks : item.cashflow_ticks;
+  const axisLabels = Object.fromEntries(
+    ticks.map((tick) => [tick.value, tick.label]),
+  );
   const series = net ? ["net"] : ["expenses", "income"];
   return (
     <Card size="sm" className="min-w-0">
-      <CardHeader>
-        <CardTitle>
+      <CardHeader className="min-h-11 items-center">
+        <CardTitle className="flex min-h-11 items-center">
           <h3>{title}</h3>
         </CardTitle>
-        <CardDescription>
-          {net
-            ? "Income minus expenses. Positive is a surplus; negative is a deficit."
-            : "Monthly expense and income totals side by side, not a forecast."}{" "}
-          Transfers are excluded.
-        </CardDescription>
+        <CardAction className="self-center">
+          <ChartViewToggle
+            label={`${item.currency} monthly chart view`}
+            value={view}
+            onChange={setView}
+            options={[
+              {
+                value: "cashflow",
+                label: "Monthly income and expenses",
+                icon: ChartColumn,
+              },
+              {
+                value: "net",
+                label: "Monthly net income",
+                icon: ChartColumnIncreasing,
+              },
+            ]}
+          />
+        </CardAction>
       </CardHeader>
       <CardContent className="min-w-0">
         <ChartContainer
           config={monthlyConfig}
           role="img"
-          aria-label={`${item.currency} ${title.toLowerCase()}, relative cash flow scale`}
+          aria-label={`${item.currency} ${title.toLowerCase()}, currency amount scale`}
           className="h-60 w-full aspect-auto"
         >
           <BarChart
+            key={view}
             accessibilityLayer
             data={rows}
             margin={{ left: 0, right: 12, top: 12, bottom: 0 }}
@@ -333,20 +367,27 @@ function MonthlyChart({ item, net = false }) {
               axisLine={false}
               minTickGap={20}
             />
-            <YAxis {...relativeScale(negative)} width={44} />
+            <YAxis
+              domain={[ticks[0].value, ticks.at(-1).value]}
+              ticks={ticks.map((tick) => tick.value)}
+              tickFormatter={(value) => `${axisLabels[value]} ${item.currency}`}
+              tick={{ fill: "var(--muted-foreground)" }}
+              tickLine={false}
+              axisLine={false}
+              width={100}
+            />
             <ReferenceLine y={0} stroke="var(--foreground)" strokeWidth={1.5} />
             <ChartTooltip
               content={
                 <ChartTooltipContent
                   labelFormatter={(_, payload) => payload[0]?.payload.label}
                   formatter={(_, name, point) => (
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span>{monthlyConfig[name].label}</span>
-                      <MoneyAmount
-                        amount={point.payload[`${name}Amount`]}
-                        currency={item.currency}
-                      />
-                    </div>
+                    <ExactTooltipValue
+                      color={point.payload.fill ?? point.color}
+                      label={monthlyConfig[name].label}
+                      amount={point.payload[`${name}Amount`]}
+                      currency={item.currency}
+                    />
                   )}
                 />
               }
@@ -376,12 +417,7 @@ function MonthlyChart({ item, net = false }) {
             ))}
           </BarChart>
         </ChartContainer>
-        <p className="mt-3 text-xs text-muted-foreground">
-          Relative scale: this chart’s largest absolute magnitude = 100%. Very
-          small amounts may not be visible. Exact values are below and in
-          tooltips.
-        </p>
-        <Collapsible>
+        <Collapsible key={view}>
           <CollapsibleTrigger asChild>
             <Button variant="ghost" className="mt-2">
               View {title.toLowerCase()} data
@@ -448,8 +484,6 @@ function MonthlyChart({ item, net = false }) {
 }
 
 export function ExpenseCharts({ charts }) {
-  const [view, setView] = useState("cashflow");
-  const viewId = useId();
   if (!charts.length) return null;
   return (
     <section aria-label="Spending charts" className="space-y-5">
@@ -462,21 +496,6 @@ export function ExpenseCharts({ charts }) {
           currency stays separate.
         </p>
       </div>
-      <div className="max-w-sm space-y-2">
-        <Label htmlFor={viewId}>Monthly chart view</Label>
-        <NativeSelect
-          id={viewId}
-          value={view}
-          onChange={(event) => setView(event.target.value)}
-        >
-          <NativeSelectOption value="cashflow">
-            Monthly Income and Expenses
-          </NativeSelectOption>
-          <NativeSelectOption value="net">
-            Monthly Net Income
-          </NativeSelectOption>
-        </NativeSelect>
-      </div>
       {charts.map((item) => (
         <section
           key={item.currency}
@@ -487,7 +506,7 @@ export function ExpenseCharts({ charts }) {
             {item.currency}
           </h3>
           <div className="grid items-start gap-3 xl:grid-cols-2">
-            <MonthlyChart key={view} item={item} net={view === "net"} />
+            <MonthlyChart item={item} />
             {item.ranking.length > 0 && <AnnualChart item={item} />}
           </div>
         </section>

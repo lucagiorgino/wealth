@@ -17,7 +17,13 @@ from app.main import app
 from app.schemas.summary import ExpenseComparisonInput, ExpenseSummary
 from app.schemas.transactions import TransactionFilters
 from app.services.import_formats import detect_date_order, normalize_amount, normalize_date
-from app.services.summary import chart_aggregates, expense_charts, expense_comparison, plot_points
+from app.services.summary import (
+    chart_aggregates,
+    expense_charts,
+    expense_comparison,
+    money_axis_ticks,
+    plot_points,
+)
 from app.services.transaction_imports import InvalidTransactionCSV, parse_csv
 
 WALLET = {"name": "Everyday", "colour": "#123abc", "icon": "wallet"}
@@ -348,6 +354,27 @@ def test_chart_geometry_preserves_exact_amounts_and_order_beyond_decimal_context
     assert chart.ranking_sum == Decimal("24691357802469135788.246913578024691357")
     assert chart.ranking_average == Decimal("2469135780246913578.824691357802469136")
     assert chart.totals.net == Decimal("-12345678901234567890.123456789012345680")
+    assert chart.cashflow_ticks[-1].amount == Decimal(high)
+    assert chart.cashflow_ticks[1].amount == Decimal("6172839450617283945.0617283945061728395")
+    assert chart.cashflow_ticks[-1].label == "1.23e+19"
+
+
+@pytest.mark.parametrize("maximum", ["0", "1234.56", "0.000000000000000001", "1E+100"])
+def test_money_axis_ticks_keep_exact_signed_scale_and_readable_numeric_labels(maximum):
+    ticks = money_axis_ticks(Decimal(maximum), True)
+    extent = Decimal(maximum) or Decimal(1)
+    assert [tick.value for tick in ticks] == [-10000, -5000, 0, 5000, 10000]
+    assert [tick.amount for tick in ticks] == [
+        extent.copy_negate(),
+        extent / -2,
+        Decimal(0),
+        extent / 2,
+        extent,
+    ]
+    assert all(Decimal(tick.label).is_finite() and "%" not in tick.label for tick in ticks)
+    if maximum == "1234.56":
+        assert [tick.label for tick in ticks] == ["-1230", "-617", "0", "617", "1230"]
+    assert money_axis_ticks(Decimal(maximum), False) == ticks[2:]
 
 
 @pytest.mark.integration

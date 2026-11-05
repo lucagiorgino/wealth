@@ -418,12 +418,15 @@ Recharts: a **Bar Chart - Multiple** shows monthly expenses and income side by
 side, or a **Bar Chart - Negative** shows monthly net income (income minus
 expenses). Positive net bars mean surplus, negative bars mean deficit, with a
 visible zero baseline. **Monthly chart view** shows only one monthly chart at a
-time, defaulting to income and expenses, with the choice applied across currencies.
-Both chart sections use compact cards and 240–260-pixel plots, arranged side by
-side on wide screens and stacked on smaller screens. Matching native select
-controls switch chart types. **Category chart view** defaults to **Bar chart**:
+time, defaulting to income and expenses. Each currency has its own view choice.
+Both chart sections use matching compact cards and aligned 240-pixel plot areas,
+arranged side by side on wide screens and stacked on smaller screens.
+Matching icon-button toggles sit to the right of each chart title, with accessible
+names and pressed states. **Category chart view** defaults to **Bar chart**:
 horizontal bars rank the top ten expense categories; **Donut chart** switches
-to their relative shares with named exact-value legend entries. Donuts are
+to their relative shares. Chart descriptions and the expanded donut legend are
+omitted; exact category names and amounts remain in tooltips and data disclosures.
+Tooltip indicators match each series or slice color, including signed net bars. Donuts are
 disabled when displayed totals are negative or all plot coordinates are zero;
 refunds are never converted into positive slices. **Bar chart** restores ranking.
 All chart tables include January through December, including the current year:
@@ -436,8 +439,10 @@ a **Totals** row for expenses, income, and net income. Ranking data includes
 all-category sum. All aggregates come from the backend; averages round once
 half-up to 18 places and sums stay exact. Animations are disabled, chart
 colors adapt to dark mode, and accessible names describe each currency/plot.
-Axes explicitly show a relative scale, not currency: only server-generated
-dimensionless coordinates become chart numbers. Monetary strings remain intact.
+Monthly axes show currency amounts using server-generated tick labels (three
+significant digits, scientific notation where useful); category axes remain
+relative. Only server-generated dimensionless coordinates become chart numbers.
+Exact tick amounts and financial strings remain intact without JavaScript money math.
 When values are negative, charts use a diverging signed scale with a visible
 zero baseline, normalized by the largest absolute magnitude; positive-only
 charts retain their existing scale. Rankings remain descending net expenses,

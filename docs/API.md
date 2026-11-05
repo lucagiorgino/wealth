@@ -758,6 +758,15 @@ All monthly series contain twelve chronological points, January through December
 including the current year. Months after the UTC cutoff contain zero due activity,
 not forecasts. Future years have no currencies/charts.
 The UI switches exclusively between grouped income/expenses and net-income bars.
+Both monthly views expose `cashflow_ticks` / `net_ticks`: ordered axis ticks with
+`value` (the dimensionless coordinate), `amount` (the exact decimal-string amount
+at that coordinate), and `label` (a server-formatted three-significant-digit numeric
+label). The monthly chart displays these labels with its currency, not percentages.
+Signed axes include -10000, -5000, 0, 5000 and 10000; positive-only axes include
+0, 5000 and 10000. Each scale uses its series' absolute maximum, or a unit extent
+when all values are zero. Tick amounts are computed exactly, even beyond the
+default Decimal context precision. Compact tick labels may use scientific
+notation; tooltips and disclosure tables retain the original unrounded amounts.
 Category rankings offer bar/donut views; donuts show shares of the displayed
 categories only and are unavailable for negative totals or all-zero geometry.
 Exact data, including the Sum/Average rows, remains available in either ranking view.
@@ -766,8 +775,9 @@ Each plot point has `key`, `label`, `amount` (an exact decimal string), and `val
 (an integer dimensionless coordinate from -10000 to 10000). Python computes coordinates
 using exact rational arithmetic, relative to the chart's largest absolute magnitude, with only the
 geometry rounded half-to-even. Very small nonzero amounts may have zero-width
-bars. Coordinates are **not monetary values**: consumers label axes as relative
-percentages and retain the original amounts in tooltips/data tables. Never turn
+bars. Coordinates are **not monetary values**: monthly axes use the supplied
+currency labels; category/comparison axes retain relative percentages.
+All plots retain original amounts in tooltips/data tables. Never turn
 amount strings into JavaScript numbers.
 Negative expenses remain signed in rankings, trends, comparisons, exact tables,
 and tooltips. Signed plots use a diverging relative axis with a zero baseline;

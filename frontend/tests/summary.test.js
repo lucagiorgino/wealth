@@ -53,6 +53,30 @@ const analysis = {
       ranking_sum: totals.total,
       ranking_average: totals.total,
       totals: { expenses: totals.total, income: "0", net: `-${totals.total}` },
+      cashflow_ticks: [
+        { value: 0, amount: "0", label: "0" },
+        {
+          value: 5000,
+          amount: "6172839450617283945.061728394506172839",
+          label: "6.17e+18",
+        },
+        { value: 10000, amount: totals.total, label: "1.23e+19" },
+      ],
+      net_ticks: [
+        { value: -10000, amount: `-${totals.total}`, label: "-1.23e+19" },
+        {
+          value: -5000,
+          amount: "-6172839450617283945.061728394506172839",
+          label: "-6.17e+18",
+        },
+        { value: 0, amount: "0", label: "0" },
+        {
+          value: 5000,
+          amount: "6172839450617283945.061728394506172839",
+          label: "6.17e+18",
+        },
+        { value: 10000, amount: totals.total, label: "1.23e+19" },
+      ],
       trend: totals.months.map((amount, index) => ({
         key: String(index + 1),
         label: `Month ${index + 1}`,
@@ -146,6 +170,7 @@ test("annual and comparison responses preserve negative exact expenses and signe
     income: "0",
     net: totals.total,
   };
+  signed.charts[0].cashflow_ticks = structuredClone(signed.charts[0].net_ticks);
   assert.deepEqual(
     await fetchExpenseAnalysis(
       { ...options, fetchImpl: async () => Response.json(signed) },
@@ -331,6 +356,18 @@ test("analysis refuses malformed or inconsistent chart geometry and amounts", as
     },
     (data) => {
       data.charts[0].totals.net = "NaN";
+    },
+    (data) => {
+      delete data.charts[0].cashflow_ticks;
+    },
+    (data) => {
+      data.charts[0].cashflow_ticks[1].amount = 0.1;
+    },
+    (data) => {
+      data.charts[0].net_ticks[0].label = "100%";
+    },
+    (data) => {
+      data.charts[0].net_ticks[1].value = -4999;
     },
   ]) {
     const data = structuredClone(analysis);

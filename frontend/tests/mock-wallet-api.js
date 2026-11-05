@@ -204,6 +204,33 @@ function yearlyAverage(amount, divisor) {
   return `${sign < 0n ? "-" : ""}${digits.slice(0, -18)}.${digits.slice(-18)}`;
 }
 
+function moneyAxisTicks(amounts, signed) {
+  const maximum = amounts
+    .map((amount) => sumExact([amount]).replace(/^-/, ""))
+    .reduce(
+      (maximum, amount) =>
+        compareAmounts(amount, maximum) > 0 ? amount : maximum,
+      "0",
+    );
+  const extent = compareAmounts(maximum, "0") === 0 ? "1" : maximum;
+  const half = sumExact(Array(5).fill(`${extent}e-1`));
+  const ticks = [
+    [0, "0"],
+    [5000, half],
+    [10000, extent],
+  ];
+  if (signed) ticks.unshift([-10000, negate(extent)], [-5000, negate(half)]);
+  return ticks.map(([value, amount]) => ({
+    value,
+    amount,
+    label: new Intl.NumberFormat("en", {
+      notation: "scientific",
+      maximumSignificantDigits: 3,
+      useGrouping: false,
+    }).format(amount),
+  }));
+}
+
 function withBalance(wallet, transactions) {
   const balance_as_of = new Date().toISOString().slice(0, 10);
   const movements = transactions
@@ -704,6 +731,11 @@ const server = createServer(async (request, response) => {
           trend: monthlyPoints(expenseMonths, scale),
           income_trend: monthlyPoints(incomeMonths, scale),
           net_trend: monthlyPoints(netMonths),
+          cashflow_ticks: moneyAxisTicks(
+            scale,
+            expenseMonths.some((amount) => amount.startsWith("-")),
+          ),
+          net_ticks: moneyAxisTicks(netMonths, true),
         };
       });
       return send(200, { summary, income_summary, charts });

@@ -219,17 +219,39 @@ test("yearly expense tables show exact category and subcategory totals, collapse
     .locator("[data-slot=chart]")
     .evaluateAll((nodes) => nodes.map((node) => node.getBoundingClientRect()));
   expect(chartBounds.every((bounds) => bounds.height <= 260)).toBe(true);
-  expect(Math.abs(chartBounds[0].y - chartBounds[1].y)).toBeLessThan(160);
+  expect(chartBounds[0].height).toBe(240);
+  expect(chartBounds[1].height).toBe(240);
+  expect(Math.abs(chartBounds[0].y - chartBounds[1].y)).toBeLessThan(1);
   expect(chartBounds[1].x).toBeGreaterThan(chartBounds[0].x);
   const monthly = charts.getByRole("img", {
     name: /monthly income and expenses/,
   });
+  await expect(monthly).not.toContainText("%");
+  await expect(monthly.locator("text").filter({ hasText: /EUR$/ })).toHaveCount(
+    3,
+  );
+  await expect(charts.getByRole("combobox")).toHaveCount(0);
+  await expect(charts.getByText(/Relative scale:|Slices show/)).toHaveCount(0);
+  const chartHeaders = await charts
+    .locator("[data-slot=card-header]")
+    .evaluateAll((nodes) =>
+      nodes.map((node) => {
+        const title = node.querySelector("h3").getBoundingClientRect();
+        const toggle = node
+          .querySelector('[role="group"]')
+          .getBoundingClientRect();
+        return { title: title.toJSON(), toggle: toggle.toJSON() };
+      }),
+    );
+  expect(
+    chartHeaders.every(({ title, toggle }) => toggle.x >= title.right),
+  ).toBe(true);
   await expect(monthly.locator(".recharts-bar")).toHaveCount(2);
   const netChart = charts.getByRole("img", { name: /monthly net income/ });
   await expect(netChart).toHaveCount(0);
-  await page
-    .getByLabel("Monthly chart view", { exact: true })
-    .selectOption("net");
+  await charts
+    .getByRole("button", { name: "Monthly net income", exact: true })
+    .click();
   await expect(monthly).toHaveCount(0);
   await expect(netChart).toBeVisible();
   await expect(charts.locator("svg.recharts-surface")).toHaveCount(2);
@@ -243,6 +265,13 @@ test("yearly expense tables show exact category and subcategory totals, collapse
     .locator(".recharts-reference-line line")
     .boundingBox();
   expect(negativeBounds.y).toBeGreaterThanOrEqual(zeroBounds.y - 1);
+  await netChart.locator("svg.recharts-surface").focus();
+  await expect(
+    netChart.locator("[data-slot=chart-tooltip-indicator]"),
+  ).toHaveCSS(
+    "background-color",
+    await negativeBar.evaluate((node) => getComputedStyle(node).fill),
+  );
   await charts
     .getByRole("button", { name: "View monthly net income data", exact: true })
     .click();
@@ -258,9 +287,9 @@ test("yearly expense tables show exact category and subcategory totals, collapse
       has: page.getByRole("rowheader", { name: "Totals", exact: true }),
     }),
   ).toContainText("-12345678901234567460.748456789012345678");
-  await page
-    .getByLabel("Monthly chart view", { exact: true })
-    .selectOption("cashflow");
+  await charts
+    .getByRole("button", { name: "Monthly income and expenses", exact: true })
+    .click();
   await monthly.locator("svg.recharts-surface").focus();
   await expect(monthly.locator(".recharts-tooltip-wrapper")).toContainText(
     "Expenses",
@@ -268,6 +297,17 @@ test("yearly expense tables show exact category and subcategory totals, collapse
   await expect(monthly.locator(".recharts-tooltip-wrapper")).toContainText(
     "Income",
   );
+  const tooltipColors = await monthly
+    .locator("[data-slot=chart-tooltip-indicator]")
+    .evaluateAll((nodes) =>
+      nodes.map((node) => getComputedStyle(node).backgroundColor),
+    );
+  const barColors = await monthly
+    .locator(".recharts-legend-wrapper .shrink-0")
+    .evaluateAll((nodes) =>
+      nodes.map((node) => getComputedStyle(node).backgroundColor),
+    );
+  expect(tooltipColors).toEqual(barColors);
   await charts
     .getByRole("button", {
       name: "View monthly income and expenses data",
@@ -333,8 +373,18 @@ test("yearly expense tables show exact category and subcategory totals, collapse
   await expect(
     charts.locator(".recharts-tooltip-wrapper").filter({ hasText: high }),
   ).toBeVisible();
-  await charts.getByLabel("Category chart view").selectOption("donut");
-  await expect(charts.getByLabel("Category chart view")).toHaveValue("donut");
+  await charts
+    .getByRole("button", { name: "Donut chart", exact: true })
+    .click();
+  await expect(
+    charts.getByRole("button", { name: "Donut chart", exact: true }),
+  ).toHaveAttribute("aria-pressed", "true");
+  const donutBounds = await charts
+    .locator("[data-slot=chart]")
+    .evaluateAll((nodes) =>
+      nodes.map((node) => node.getBoundingClientRect().toJSON()),
+    );
+  expect(Math.abs(donutBounds[0].y - donutBounds[1].y)).toBeLessThan(1);
   await expect(
     charts.getByRole("img", {
       name: /category ranking, relative expense scale/,
@@ -352,15 +402,26 @@ test("yearly expense tables show exact category and subcategory totals, collapse
   await expect(
     charts.locator(".recharts-tooltip-wrapper").filter({ hasText: high }),
   ).toBeVisible();
+  const donutTooltip = charts
+    .getByRole("img", { name: /category ranking, donut share/ })
+    .locator("[data-slot=chart-tooltip-indicator]");
+  await expect(donutTooltip).toHaveCSS(
+    "background-color",
+    await firstSlice.evaluate((node) => getComputedStyle(node).fill),
+  );
   await expect(
     charts.getByRole("list", { name: "EUR donut categories", exact: true }),
-  ).toContainText("Food");
+  ).toHaveCount(0);
+  await charts.screenshot({
+    path: testInfo.outputPath("summary-aligned-charts.png"),
+    animations: "disabled",
+  });
   await expect(rankingRow("Sum")).toBeVisible();
   await page.screenshot({
     path: testInfo.outputPath("summary-donut-desktop.png"),
     fullPage: true,
   });
-  await charts.getByLabel("Category chart view").selectOption("bar");
+  await charts.getByRole("button", { name: "Bar chart", exact: true }).click();
   await rankingSurface.focus();
   await page.keyboard.press("ArrowLeft");
   await expect(
@@ -637,7 +698,9 @@ test("yearly expense tables show exact category and subcategory totals, collapse
     fullPage: true,
   });
   await page.evaluate(() => document.documentElement.classList.add("dark"));
-  await charts.getByLabel("Category chart view").selectOption("donut");
+  await charts
+    .getByRole("button", { name: "Donut chart", exact: true })
+    .click();
   await assertReadableCharts(page);
   await page.screenshot({
     path: testInfo.outputPath("summary-expanded-dark.png"),
@@ -649,9 +712,11 @@ test("yearly expense tables show exact category and subcategory totals, collapse
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.setViewportSize({ width: 375, height: 812 });
   await expect(
-    page.getByLabel("Monthly chart view", { exact: true }),
+    charts.getByRole("group", { name: "EUR monthly chart view", exact: true }),
   ).toBeVisible();
-  await expect(charts.getByLabel("Category chart view")).toHaveValue("donut");
+  await expect(
+    charts.getByRole("button", { name: "Donut chart", exact: true }),
+  ).toHaveAttribute("aria-pressed", "true");
   const chartDataScroll = charts.getByRole("region", {
     name: "EUR category ranking data, scroll horizontally",
     exact: true,

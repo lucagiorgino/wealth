@@ -379,20 +379,22 @@ Scroll inside the table to reveal all months; totals preserve exact precision.
 Refresh to see newly due occurrences. Transaction/import and category mutations
 refresh the relevant Summary data after success.
 
-Use **Monthly chart view** above the tables to switch between grouped monthly
+Use the icon toggles to the right of each chart title to switch between grouped monthly
 expenses/income and monthly net income (income minus expenses); only one is
-shown at a time. Chart data tables always include January-December and a
+shown per currency at a time. Chart data tables always include January-December and a
 **Totals** footer; months beyond today's cutoff contain zero due activity.
-The two compact chart cards sit side by side on wide screens and stack on mobile.
-Like the monthly selector, **Category chart view** offers **Bar chart / Donut chart**.
-Donuts show
+The two compact chart cards have aligned, equal-height plots on wide screens and stack on mobile.
+The matching category toggle offers **Bar chart / Donut chart**. Descriptions
+and the expanded donut legend are removed; colored tooltip indicators identify
+the hovered series/slice, including negative net bars. Donuts show
 only the displayed categories' shares and are disabled for signed totals or
 all-zero geometry. Their data table includes **Sum** and **Average** of the
 displayed categories; this average is not per month. Positive net bars
 show surplus and negative bars show deficit; negative expenses increase net.
 Income-only currencies remain visible. Use their
-**View ... data** buttons for exact values without hovering. Axes are explicitly
-relative, not currency; very small amounts can be invisible in plots while
+**View ... data** buttons for exact values without hovering. Monthly axes show
+currency amounts from server-generated tick labels, while category axes remain
+relative. Very small amounts can be invisible in plots while
 remaining exact in data tables. Each currency is separate.
 
 Open the dedicated **Compare spending** sidebar entry (`/compare-spending`),
