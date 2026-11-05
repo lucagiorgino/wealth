@@ -12,6 +12,7 @@ test("configured private pages require a session", async ({ request }) => {
     "/categories",
     "/transactions",
     "/summary",
+    "/assets",
     "/compare-spending",
   ]) {
     const response = await request.get(path, { maxRedirects: 0 });

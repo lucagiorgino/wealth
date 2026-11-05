@@ -25,6 +25,7 @@ PREFERENCES = {
         "wallets",
         "transactions",
         "summary",
+        "assets",
         "comparison",
         "categories",
     ],
@@ -592,6 +593,13 @@ def test_comparison_navigation_migration_preserves_saved_order_and_preferences(a
                 assert row["sidebar_order"] == order[:position] + ["comparison"] + order[position:]
                 assert row["theme"] == "dark"
                 assert row["display_name"] == "Saved name"
+            await connection.execute((migrations / "015_assets.sql").read_text())
+            cursor = await connection.execute("SELECT sidebar_order FROM users ORDER BY subject")
+            for row, order in zip(await cursor.fetchall(), orders, strict=True):
+                position = order.index("summary") + 1
+                assert row["sidebar_order"] == (
+                    order[:position] + ["assets", "comparison"] + order[position:]
+                )
             cursor = await connection.execute(
                 "INSERT INTO users (subject) VALUES ('new') RETURNING sidebar_order"
             )

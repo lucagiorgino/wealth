@@ -23,6 +23,7 @@ test("every page remains readable and navigable across phone, tablet, desktop, a
     ["/wallets", "Wallets", "wallets"],
     ["/transactions?month=2024-12", "Transactions", "transactions"],
     ["/summary?year=2024", "Summary", "summary"],
+    ["/assets?year=2024", "Assets", "assets"],
     ["/compare-spending", "Compare spending", "compare-spending"],
     ["/categories", "Categories", "categories"],
     ["/account", "Your account", "account"],
@@ -75,7 +76,7 @@ test("every page remains readable and navigable across phone, tablet, desktop, a
           name: "Main navigation",
           exact: true,
         });
-        await expect(nav.getByRole("link")).toHaveCount(6);
+        await expect(nav.getByRole("link")).toHaveCount(7);
         for (const link of await nav.getByRole("link").all()) {
           await expect(link).toBeInViewport();
           const box = await link.boundingBox();

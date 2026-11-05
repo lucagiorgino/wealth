@@ -8,6 +8,7 @@ import {
   ChartNoAxesCombined,
   LayoutDashboard,
   LockKeyhole,
+  Landmark,
   Tags,
   Wallet,
 } from "lucide-react";
@@ -19,6 +20,7 @@ const icons = {
   wallets: Wallet,
   transactions: ArrowLeftRight,
   summary: ChartNoAxesColumn,
+  assets: Landmark,
   comparison: ChartNoAxesCombined,
   categories: Tags,
 };
@@ -53,7 +55,7 @@ export function AppSidebar({
       </Link>
       <nav
         aria-label="Main navigation"
-        className="col-span-2 row-start-2 grid grid-cols-3 gap-1 sm:grid-cols-6 md:flex md:flex-col md:gap-1.5"
+        className="col-span-2 row-start-2 grid grid-cols-3 gap-1 sm:grid-cols-4 md:flex md:flex-col md:gap-1.5"
       >
         <p className="mb-2 hidden px-3 text-[10px] font-semibold tracking-widest text-muted-foreground uppercase md:block">
           Workspace

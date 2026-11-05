@@ -27,6 +27,12 @@ import {
 } from "./transaction-imports.js";
 import { comparisonPayload, summaryYear } from "./summary.js";
 import { validSettings } from "./settings.js";
+import {
+  assetGroups,
+  assetId,
+  negativeAmount,
+  validAssetPosition,
+} from "./assets.js";
 
 export class BackendError extends Error {
   constructor(
@@ -820,6 +826,186 @@ function validateMoneyAxisTicks(ticks, signed) {
     throw new BackendError(502);
   }
   return ticks.map(({ value, amount, label }) => ({ value, amount, label }));
+}
+
+export async function fetchAssetSummary(options, year) {
+  summaryYear(String(year));
+  const data = await backendRequest({
+    ...options,
+    path: `/api/v1/assets?year=${year}`,
+  });
+  const validAmount = (value) =>
+    value === null || (typeof value === "string" && decimalAmount.test(value));
+  const validValues = (values) =>
+    values &&
+    validAmount(values.opening) &&
+    validAmount(values.latest) &&
+    Array.isArray(values.months) &&
+    values.months.length === 12 &&
+    values.months.every(validAmount);
+  const unique = (items, key) =>
+    new Set(items.map((item) => item?.[key])).size === items.length;
+  if (
+    data?.year !== year ||
+    !validDate(data.as_of) ||
+    !Array.isArray(data.currencies) ||
+    !unique(data.currencies, "currency") ||
+    data.currencies.some(
+      (item) =>
+        !walletCurrencies.includes(item?.currency) ||
+        ![
+          "assets",
+          "liabilities",
+          "net_worth",
+          "change",
+          "change_percent",
+        ].every((key) => validValues(item[key])) ||
+        !Array.isArray(item.missing_values) ||
+        item.missing_values.length !== 13 ||
+        !item.missing_values.every(
+          (value) => Number.isInteger(value) && value >= 0,
+        ) ||
+        !Array.isArray(item.groups) ||
+        !item.groups.length ||
+        !unique(item.groups, "key") ||
+        item.groups.some(
+          (group) =>
+            !assetGroups.some((option) => option.value === group?.key) ||
+            typeof group.label !== "string" ||
+            !group.label.trim() ||
+            !validValues(group.values) ||
+            !Array.isArray(group.holdings) ||
+            !group.holdings.length ||
+            !unique(group.holdings, "id") ||
+            group.holdings.some(
+              (holding) =>
+                !validAssetPosition(holding) ||
+                holding.asset_group !== group.key ||
+                holding.currency !== item.currency ||
+                !["wallet", "asset"].includes(holding.source) ||
+                !validValues(holding.values),
+            ),
+        ) ||
+        !Array.isArray(item.trend) ||
+        item.trend.length !== 12 ||
+        item.trend.some(
+          (point, index) =>
+            point?.key !== String(index + 1) ||
+            typeof point.label !== "string" ||
+            !point.label.trim() ||
+            !validAmount(point.amount) ||
+            point.amount !== item.net_worth.months[index] ||
+            (point.amount === null
+              ? point.value !== null
+              : !Number.isInteger(point.value) ||
+                Math.abs(point.value) > 10000),
+        ),
+    )
+  ) {
+    console.error("Backend returned an invalid asset summary");
+    throw new BackendError(502);
+  }
+  const values = ({ opening, months, latest }) => ({ opening, months, latest });
+  return {
+    year: data.year,
+    as_of: data.as_of,
+    currencies: data.currencies.map((item) => {
+      const allocatedGroups = item.groups.filter(
+        (group) => group.key !== "liabilities" && group.values.latest !== null,
+      );
+      const allocation = validatePlotPoints(
+        item.allocation,
+        allocatedGroups.map((group) => group.key),
+      );
+      if (
+        allocation.some(
+          (point, index) =>
+            point.amount !== allocatedGroups[index].values.latest,
+        )
+      ) {
+        console.error("Backend returned inconsistent asset allocation");
+        throw new BackendError(502);
+      }
+      return {
+        currency: item.currency,
+        groups: item.groups.map((group) => ({
+          key: group.key,
+          label: group.label,
+          values: values(group.values),
+          holdings: group.holdings.map((holding) => ({
+            id: holding.id,
+            name: holding.name,
+            asset_group: holding.asset_group,
+            currency: holding.currency,
+            source: holding.source,
+            values: values(holding.values),
+          })),
+        })),
+        ...Object.fromEntries(
+          [
+            "assets",
+            "liabilities",
+            "net_worth",
+            "change",
+            "change_percent",
+          ].map((key) => [key, values(item[key])]),
+        ),
+        missing_values: item.missing_values,
+        trend: item.trend.map(({ key, label, amount, value }) => ({
+          key,
+          label,
+          amount,
+          value,
+        })),
+        allocation,
+        net_worth_ticks: validateMoneyAxisTicks(item.net_worth_ticks, true),
+        allocation_ticks: validateMoneyAxisTicks(
+          item.allocation_ticks,
+          allocation.some((point) => negativeAmount(point.amount)),
+        ),
+      };
+    }),
+  };
+}
+
+export async function postAsset(options, data) {
+  const result = await backendRequest({
+    ...options,
+    path: "/api/v1/assets",
+    method: "POST",
+    body: data,
+    validationMessage:
+      "Check the asset name, group, currency, date and nonnegative valuation.",
+  });
+  if (!validAssetPosition(result)) {
+    console.error("Backend returned an invalid asset");
+    throw new BackendError(502);
+  }
+  return {
+    id: result.id,
+    name: result.name,
+    asset_group: result.asset_group,
+    currency: result.currency,
+  };
+}
+
+export async function putAssetValuation(options, id, data) {
+  return backendRequest({
+    ...options,
+    path: `/api/v1/assets/${assetId(id)}/valuations`,
+    method: "PUT",
+    body: data,
+    validationMessage:
+      "Enter a nonnegative exact valuation with a date no later than today.",
+  });
+}
+
+export async function removeAsset(options, id) {
+  return backendRequest({
+    ...options,
+    path: `/api/v1/assets/${assetId(id)}`,
+    method: "DELETE",
+  });
 }
 
 export async function fetchExpenseAnalysis(options, year) {

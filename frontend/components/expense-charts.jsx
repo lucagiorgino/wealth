@@ -62,7 +62,7 @@ export const relativeScale = (negative) => ({
   tick: { fill: "var(--muted-foreground)" },
 });
 
-function ChartViewToggle({ label, value, onChange, options }) {
+export function ChartViewToggle({ label, value, onChange, options }) {
   return (
     <div role="group" aria-label={label} className="flex gap-1">
       {options.map(
@@ -87,7 +87,7 @@ function ChartViewToggle({ label, value, onChange, options }) {
   );
 }
 
-function ExactTooltipValue({ color, label, amount, currency }) {
+export function ExactTooltipValue({ color, label, amount, currency }) {
   return (
     <span className="flex w-full flex-wrap items-center gap-2">
       <span

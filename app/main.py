@@ -3,6 +3,7 @@ from fastapi.responses import JSONResponse
 from starlette.middleware.base import RequestResponseEndpoint
 
 from app.api.account import router as account_router
+from app.api.assets import router as assets_router
 from app.api.categories import router as categories_router
 from app.api.health import router as health_router
 from app.api.identity import router as identity_router
@@ -11,6 +12,7 @@ from app.api.summary import router as summary_router
 from app.api.transaction_imports import router as transaction_imports_router
 from app.api.transactions import router as transactions_router
 from app.api.wallets import router as wallets_router
+from app.db.assets import AssetNotFound
 from app.db.categories import (
     CategoryInUse,
     CategoryKindMismatch,
@@ -42,6 +44,12 @@ app.include_router(categories_router)
 app.include_router(transaction_imports_router)
 app.include_router(transactions_router)
 app.include_router(summary_router)
+app.include_router(assets_router)
+
+
+@app.exception_handler(AssetNotFound)
+async def asset_not_found(request: Request, exc: AssetNotFound) -> JSONResponse:
+    return JSONResponse(status_code=404, content={"detail": "Asset not found"})
 
 
 @app.exception_handler(InvalidBulkTransactionChange)

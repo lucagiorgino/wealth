@@ -149,13 +149,13 @@ profile access and links to wallets, categories, and transactions, not an
 analytics or balance summary. Unexpected rendering failures offer retry/home
 actions; expected API failures remain explicit within their page.
 
-`/dashboard`, `/wallets`, `/transactions`, `/summary`, `/compare-spending`, `/categories`, `/account`, and `/settings` share the `(app)`
+`/dashboard`, `/wallets`, `/transactions`, `/summary`, `/assets`, `/compare-spending`, `/categories`, `/account`, and `/settings` share the `(app)`
 route-group layout and sidebar.
 Navigation highlights the current page and stays visible across private pages.
-Desktop uses a sticky left rail; phones use a compact sticky header with all six
+Desktop uses a sticky left rail; phones use a compact sticky header with all seven
 navigation destinations visible and the account menu beside the wordmark.
-Narrow phones arrange navigation in two rows of three; wider mobile screens use
-one row of six.
+Narrow phones arrange navigation in three columns; wider mobile screens use
+four columns. Desktop retains its vertical rail.
 A bottom desktop profile footer shows the
 saved image/icon, name, and session email when available. Its keyboard-accessible
 three-dot menu opens **Manage account**, **Settings**, and **Sign out**. Profile image controls
@@ -168,7 +168,7 @@ session; the shared layout is not an authorization boundary.
 ### Workspace settings
 
 Open **Settings** from the account menu to choose **Light** or **Dark** and move
-sidebar features up/down with labelled, keyboard-accessible buttons. All six
+sidebar features up/down with labelled, keyboard-accessible buttons. All seven
 features remain available; the account menu stays fixed. Changes apply only
 after **Save settings**, to both desktop and mobile navigation. Failed saves
 keep the edited theme/order and show an explicit error without changing the
@@ -448,6 +448,46 @@ zero baseline, normalized by the largest absolute magnitude; positive-only
 charts retain their existing scale. Rankings remain descending net expenses,
 not absolute spending. Refunds reduce expense totals and increase net income
 and wallet balances; exact signed values remain available in tables/tooltips.
+
+### Assets and patrimony
+
+**Assets** opens independently authenticated `/assets`, using the same year picker,
+semantic cards, typography, 240-pixel aligned chart areas, title-right icon toggles,
+exact color-matched tooltips and keyboard-scrollable tables as Summary.
+Each currency has Net worth, Assets and Liabilities cards; **Monthly net worth**
+switches between line and bar views, and **Asset allocation** between bar and donut.
+Both axes use backend-generated monetary labels rather than percentage axes.
+Allocation excludes liabilities; negative cash keeps signed bars and disables
+donut shares instead of converting negatives into positive slices.
+
+The monthly table groups Cash, Stocks / ETF, Crypto, Bonds, Other assets and
+Liabilities, with expandable holdings, Opening, January–December and Latest.
+Hide/show holdings keeps group totals visible. Its footer shows assets, liabilities,
+net worth, absolute monthly change and percentage change. Snapshots are never summed
+across months. Opening uses previous December 31; completed months use month-end,
+the current month uses today UTC, and future months remain unavailable.
+Missing valuations display dashes, not invented zeros. Totals include recorded
+holdings only and expose a coverage warning; changes require complete adjacent
+months and percentages from zero remain undefined.
+
+Existing wallets supply cash automatically from their current initial amounts and
+due recurring transactions. These are reconstructed balances: wallet/series edits
+change historical reports. Bank/trading/exchange labels do not connect financial
+providers or value investments. **Add asset** records a separate holding's group,
+currency and first dated total valuation; do not include cash already counted in
+wallets. Manual holdings have **Record valuation** and confirmed **Delete asset**
+controls. Saving the same date replaces it; other dates add history, carrying the
+value forward until another recorded valuation. Record zero to close a position.
+Enter debt as a positive liability. Deletion removes the entire valuation history.
+Metadata editing and individual snapshot deletion are not yet exposed.
+
+Failed saves keep the dialog and all edits for retry. Successful wallet,
+transaction/import and valuation mutations revalidate Assets. Reads/failures do
+not add sample holdings or seed the reference spreadsheet's private figures.
+There are no live quotes, quantities, forecasts or currency conversion.
+Apply migration `015_assets.sql` with `make migrate`; no dependency or environment
+change is required. See [the HTTP contract](../docs/API.md#assets-and-patrimony)
+and [Mermaid diagrams](../docs/IMPLEMENTATION_STATUS.md#assets-and-patrimony).
 
 ### Spending comparisons
 

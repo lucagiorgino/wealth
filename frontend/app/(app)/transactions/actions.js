@@ -52,6 +52,7 @@ export async function saveTransactionAction(previousState, formData) {
   revalidatePath("/transactions");
   revalidatePath("/summary");
   revalidatePath("/wallets");
+  revalidatePath("/assets");
   return { success: "Transaction saved." };
 }
 
@@ -66,6 +67,7 @@ export async function deleteTransactionAction(previousState, formData) {
   revalidatePath("/transactions");
   revalidatePath("/summary");
   revalidatePath("/wallets");
+  revalidatePath("/assets");
   return { success: "Transaction deleted." };
 }
 
@@ -79,6 +81,7 @@ export async function bulkUpdateTransactionsAction(previousState, formData) {
   revalidatePath("/transactions");
   revalidatePath("/summary");
   revalidatePath("/wallets");
+  revalidatePath("/assets");
   return { success: "Selected transactions saved." };
 }
 
@@ -92,6 +95,7 @@ export async function bulkDeleteTransactionsAction(previousState, formData) {
   revalidatePath("/transactions");
   revalidatePath("/summary");
   revalidatePath("/wallets");
+  revalidatePath("/assets");
   return { success: "Selected transactions deleted." };
 }
 export async function uploadCSVAction(formData) {
@@ -125,5 +129,6 @@ export async function confirmCSVAction(data) {
   revalidatePath("/summary");
   revalidatePath("/wallets");
   revalidatePath("/categories");
+  revalidatePath("/assets");
   return result;
 }

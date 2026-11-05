@@ -3,6 +3,7 @@ export const sidebarPages = [
   { id: "wallets", href: "/wallets", label: "Wallets" },
   { id: "transactions", href: "/transactions", label: "Transactions" },
   { id: "summary", href: "/summary", label: "Summary" },
+  { id: "assets", href: "/assets", label: "Assets" },
   { id: "comparison", href: "/compare-spending", label: "Compare spending" },
   { id: "categories", href: "/categories", label: "Categories" },
 ];

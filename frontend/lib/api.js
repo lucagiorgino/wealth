@@ -26,6 +26,10 @@ import {
   fetchTransactions,
   fetchExpenseSummary,
   fetchExpenseAnalysis,
+  fetchAssetSummary,
+  postAsset,
+  putAssetValuation,
+  removeAsset,
   postExpenseComparison,
   fetchTransactionOptions,
   saveTransaction,
@@ -136,6 +140,22 @@ export async function getExpenseSummary(year) {
 
 export async function getExpenseAnalysis(year) {
   return fetchExpenseAnalysis(await apiOptions(), year);
+}
+
+export async function getAssetSummary(year) {
+  return fetchAssetSummary(await apiOptions(), year);
+}
+
+export async function createAsset(data) {
+  return postAsset(await apiOptions(), data);
+}
+
+export async function recordAssetValuation(id, data) {
+  return putAssetValuation(await apiOptions(), id, data);
+}
+
+export async function deleteAsset(id) {
+  return removeAsset(await apiOptions(), id);
 }
 
 export async function compareExpenses(data) {

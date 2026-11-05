@@ -47,6 +47,7 @@ test("account settings persist theme and keyboard-accessible desktop/mobile navi
     "Dashboard",
     "Wallets",
     "Summary",
+    "Assets",
     "Compare spending",
     "Categories",
   ];

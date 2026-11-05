@@ -30,6 +30,7 @@
 | Private annual expense/income analysis, monthly/yearly category/subcategory tables, grouped monthly bars and diverging net bars | `app/api/summary.py`, `app/services/summary.py`, `app/db/summary.py`, `app/schemas/summary.py`, `/summary`, `expense-summary.jsx`, `expense-charts.jsx`; database, adapter and browser tests |
 | Shadcn category-ranking/monthly-trend charts and 2–6-period month/year/yearly-range-average comparisons | `app/db/expense_comparisons.py`, Summary schemas/services/routes, `expense-charts.jsx`, `expense-comparison.jsx`, registry Chart/Recharts; exact geometry/rounding, private transport, and browser comparison tests |
 | Dedicated Compare spending page and reorderable sixth sidebar entry | `/compare-spending`, independently authenticated page/action, migration `014_comparison_navigation.sql`; saved-order migration, settings, private-route and responsive comparison browser tests |
+| Annual per-currency patrimony, reconstructed wallet cash, manual asset/liability valuations, Summary-consistent charts and seventh navigation feature | `app/api/assets.py`, `app/db/assets.py`, `app/services/assets.py`, `015_assets.sql`, `/assets`, `asset-*.jsx`; `tests/test_assets.py`, frontend adapter and authenticated browser tests |
 | Server-side SDK token renewal, rotated-cookie persistence, safe reauthentication and retryable provider failures | `frontend/lib/auth0.js`, `auth-errors.js`, `api.js`, `proxy.js`; typed-error unit tests and synthetic-provider `token-refresh.spec.js` |
 | Reviewed CSV transaction import with mapping, approved missing-record creation, exact amount/date normalization, row corrections/exclusion, and atomic safe-retry confirmation | `app/services/transaction_imports.py`, `app/services/import_formats.py`, `app/db/transaction_imports.py`, `006_transaction_imports.sql`, import dialog/actions; API/database, adapter, and CSV browser tests |
 | API token origin/cache/response boundaries                                                                                     | `frontend/tests/config.test.js`, `frontend/tests/api-client.test.js`                                                                                                                                    |
@@ -38,12 +39,25 @@
 
 Wallets support private editing, protected deletion, EUR-default currencies,
 and exact current balances through today UTC. See [wallet balances and management](#wallet-balances-and-management).
-Asset tracking remains planned. Currency conversion, cross-currency aggregates, transaction export,
+Manual asset/liability tracking is implemented; live quotes and quantities remain planned.
+Currency conversion, cross-currency aggregates, transaction export,
 individual recurring-occurrence exceptions,
 and local password accounts are not implemented. The Auth0 flow requires a configured external tenant;
 automated bootstrap checks do not prove a live end-to-end provider login.
 
 ## Verification scope
+
+Assets passed all 434 backend tests against isolated PostgreSQL, all 67 frontend
+unit tests, backend/frontend lint and formatting, a production SSR build, and six
+focused Chromium workflows. Coverage includes exact reconstructed cash/recurrence/
+transfer/refund handling, owner isolation, nonprovisioning reads, valuation upserts,
+zero/missing/future values, undefined percentages, composite ownership constraints,
+order-preserving navigation migration, retained failed-save edits, confirmed history
+deletion, shared year navigation, aligned chart headers/plots, colored exact tooltips,
+bar/line/donut switching, authentication and explicit read failures.
+Responsive/dark navigation checks include Assets at 320–1440 pixels; populated
+desktop and mobile/dark screenshots were inspected. Browser tests use synthetic
+sessions and a mock API; PostgreSQL tests establish real persistence and ownership.
 
 The compact transaction list, bulk actions and persistent pins passed 257
 database-backed transaction/wallet tests, all 64 frontend unit tests, all 24
@@ -482,6 +496,8 @@ erDiagram
     categories ||--o{ subcategories : contains
     users ||--o{ transactions : owns
     users ||--o{ transaction_imports : confirmed_import_receipts
+    users ||--o{ assets : owns
+    assets ||--o{ asset_valuations : dated_owned_values
     wallets ||--o{ transactions : source_or_income_receiver
     wallets |o--o{ transactions : transfer_destination
     categories ||--o{ transactions : categorizes
@@ -492,7 +508,7 @@ erDiagram
         varchar(32) icon "Profile icon, default user-round"
         bytea avatar_png "Nullable normalized PNG, 1 through 327680 bytes"
         varchar(5) theme "light default or dark"
-        text[] sidebar_order "All six feature IDs exactly once, default application order"
+        text[] sidebar_order "All seven feature IDs exactly once, default application order"
     }
     wallets {
         uuid id PK "Generated UUID, also composite unique with owner"
@@ -505,6 +521,19 @@ erDiagram
         numeric initial_amount "Finite decimal, default 0"
         varchar(3) currency "Supported code, default EUR"
         timestamptz created_at "Default now"
+    }
+    assets {
+        uuid id PK "Generated UUID, also composite unique with owner"
+        text owner_subject FK "References users.subject"
+        text name "Nonblank, 1 through 100 characters"
+        text asset_group "cash, stocks, crypto, bonds, other, liabilities"
+        text currency "Supported wallet currency allowlist"
+    }
+    asset_valuations {
+        uuid asset_id PK, FK "Composite FK with owner to assets"
+        text owner_subject FK "Paired with asset_id"
+        date date PK "Dated snapshot, API refuses future dates"
+        numeric amount "Finite nonnegative exact total value"
     }
     categories {
         uuid id PK "Generated UUID, also composite unique with owner"
@@ -617,7 +646,7 @@ the first occurrence, while null means indefinitely. Edits/deletes target the
 entire definition/series, including history, and are explicitly labeled.
 Occurrences have no separate table and need no scheduler. Wallet initial amounts
 remain unchanged by transaction writes. Balances are calculated, not stored;
-assets have no database representation. Referenced wallets cannot be deleted or
+manual assets use separate dated valuations. Referenced wallets cannot be deleted or
 change currency. Transfer currencies are checked under shared wallet locks.
 Keep this Mermaid ER diagram synchronized with actual migrations.
 
@@ -634,7 +663,7 @@ persisted, and no receipt exists for upload, validation, or cancellation.
 flowchart LR
     Welcome["Public welcome /"] -->|"Sign in through Auth0"| Dashboard["Landing dashboard /dashboard"]
     subgraph Shell["Shared private layout: desktop rail or compact sticky mobile header"]
-        Sidebar["Six features in saved order; fixed account menu and sign-out"]
+        Sidebar["Seven features in saved order; fixed account menu and sign-out"]
         Dashboard <-->|"Sidebar navigation"| Wallets["Wallets /wallets?page=N"]
         Sidebar <-->|"Manage account"| Account["Account /account and icon-or-image profile picture"]
         Sidebar <-->|"Settings"| Settings["Settings /settings: light or dark and feature ordering"]
@@ -646,6 +675,7 @@ flowchart LR
         Sidebar --- Categories
         Sidebar --- Transactions
         Sidebar --- Summary["Annual expense and income analysis /summary?year=N"]
+        Sidebar --- Assets["Annual patrimony /assets?year=N"]
         Sidebar --- Comparison["Compare spending /compare-spending"]
     end
     Dashboard -->|"Server-only request"| Profile["GET /api/v1/account"]
@@ -660,6 +690,7 @@ flowchart LR
     Categories -->|"Server-only requests and session-checked actions"| CategoryAPI["Private category CRUD and optional preset imports"]
     Transactions -->|"Server-only filtered listing and session-checked actions"| TransactionAPI["Private transaction CRUD, recurrence, and wallet options"]
     Summary -->|"Server-only request"| SummaryAPI["GET /api/v1/summary/analysis?year=N"]
+    Assets -->|"Independently session-checked load and valuation actions"| AssetAPI["Private annual asset report and owned holding/valuation mutations"]
     Comparison -->|"Independently session-checked read-only action"| CompareAPI["POST /api/v1/summary/compare"]
 ```
 
@@ -711,6 +742,9 @@ flowchart LR
         ComparisonUI["Dedicated Compare spending page with period controls, grouped bars and exact tables"]
         Frontend -->|"Independently authenticated page; current UTC defaults"| ComparisonUI
         ComparisonUI -->|"Session-checked read-only period comparison"| Frontend
+        AssetUI["Assets: per-currency patrimony cards, aligned chart toggles, grouped monthly snapshots and valuation dialogs"]
+        Frontend -->|"Exact values, missing coverage and dimensionless geometry"| AssetUI
+        AssetUI -->|"Year URL and independently session-checked valuation actions"| Frontend
     end
     Browser <-->|"Provider sign-in"| Auth0["Auth0"]
     FontBuild -->|"Build-time HTTPS font download only"| FontSource["Google Fonts"]
@@ -742,6 +776,10 @@ flowchart LR
     AnalysisService --> AnalysisStore["One owned expense/income snapshot; grouped category totals and exact monthly net"]
     AnalysisStore --> Projection
     AnalysisStore -->|"One read-only exact numeric query"| DB
+    API --> AssetService["Asset service: current UTC checkpoints, carry-forward values, exact net worth and change"]
+    AssetService --> AssetStore["Owned wallet cash and dated asset/liability snapshot query"]
+    AssetStore --> Projection
+    AssetStore -->|"Read-only snapshot; separately transactional owned valuation writes"| DB
     AnalysisService --> CompareStore["Owned multi-period grouping sets; exact sums and once-rounded yearly range averages"]
     CompareStore --> Projection
     CompareStore -->|"One read-only snapshot for every selected period"| DB
@@ -825,11 +863,81 @@ Maintain this operation index as operations are added:
 [transaction listing and recurrence](#transaction-listing-and-recurrence),
 [annual expense analysis](#annual-expense-analysis),
 [expense charts and period comparisons](#expense-charts-and-period-comparisons),
+[assets and patrimony](#assets-and-patrimony),
 [CSV transaction import](#csv-transaction-import),
 [live development](#live-development),
 [database migration](#database-migration),
 [readiness](#database-readiness),
 [unconfigured setup](#unconfigured-setup).
+
+### Assets and patrimony
+
+The private Assets page follows Summary's visual system without importing the
+reference spreadsheet's private data. Existing wallet balances supply Cash.
+Manually recorded holdings group into Cash, Stocks / ETF, Crypto, Bonds, Other
+assets and Liabilities, retaining separate currencies. Snapshot values carry
+forward; unknown/future values remain null. Net worth is assets minus positive
+liabilities, not a sum of month snapshots. Missing valuations warn that totals
+include recorded values only; incomplete adjacent months and zero denominators
+do not manufacture growth rates. Percentage ratios round once half-up to 18 places.
+
+Wallet history is reconstructed from current initial amounts and owned due
+occurrences, not persisted balances or an immutable ledger. Backdated valuations
+and wallet/series edits change history. Valuation deletion is currently whole-holding
+only, behind explicit confirmation. No provider integration, quote/quantity model,
+currency conversion, forecast or metadata editing is implemented.
+See [the API contract](API.md#assets-and-patrimony) for complete semantics.
+
+```mermaid
+flowchart LR
+    Page["Authenticated Assets SSR page"] -->|"Server-only token, no-store"| API["FastAPI verified identity"]
+    Page --> Charts["Aligned monthly line/bar and allocation bar/donut charts"]
+    Page --> Table["Per-currency expandable monthly table and exact totals"]
+    Forms["Session-checked asset/valuation actions"] --> API
+    API --> Report["Patrimony service: fixed UTC checkpoints and exact arithmetic"]
+    Report --> Query["One owned read-only snapshot"]
+    Query --> Projection["Shared anchored transaction occurrence projection"]
+    Query --> DB[("PostgreSQL: wallets, transactions, assets, asset_valuations")]
+    API --> Writes["Owned holding creation/deletion and date-value upserts"]
+    Writes --> DB
+    Report -->|"Decimal strings, missing coverage, monetary ticks and dimensionless geometry"| Page
+```
+
+```mermaid
+sequenceDiagram
+    actor User
+    participant Web as Next.js page / server actions
+    participant API as FastAPI verified-subject API
+    participant Service as Patrimony service
+    participant DB as PostgreSQL
+    User->>Web: Open Assets with selected year
+    Web->>Web: Require session independently
+    Web->>API: GET /api/v1/assets?year=N (server-only bearer, no-store)
+    API->>Service: Verified owner, year, fixed UTC date
+    Service->>DB: Read-only owned wallet/occurrence and latest valuation snapshot at 13 checkpoints
+    DB-->>Service: Exact numeric values or unknowns
+    Service-->>API: Per-currency totals, signed geometry, missing coverage and once-rounded changes
+    API-->>Web: Private no-store response
+    Web-->>User: Exact monthly table, cards and aligned toggleable charts
+    User->>Web: Add holding or save dated total valuation
+    Web->>Web: Independently require session and validate input
+    Web->>API: POST asset / PUT owned asset valuation
+    API->>DB: Transaction: provision only if creating, owned lock, insert/upsert valuation
+    alt Successful write
+        DB-->>API: Commit
+        API-->>Web: 201 or 204
+        Web->>Web: Revalidate Assets only after success
+        Web-->>User: Close dialog and render refreshed snapshot
+    else Invalid/foreign/unavailable
+        API-->>Web: Explicit 422 / 404 / 503
+        Web-->>User: Keep edits and show refusal
+    end
+    User->>Web: Confirm deletion of holding and all valuations
+    Web->>API: Independently authenticated DELETE asset
+    API->>DB: Delete WHERE owner = verified sub; cascade only its valuations
+    API-->>Web: 204 (foreign/missing: 404)
+    Web->>Web: Revalidate Assets after success
+```
 
 ### Live development
 

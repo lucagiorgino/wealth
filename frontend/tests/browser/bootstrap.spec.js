@@ -33,6 +33,8 @@ test("unconfigured landing page is honest and private routes stay closed", async
   await expect(page).toHaveURL("/");
   await page.goto("/compare-spending");
   await expect(page).toHaveURL("/");
+  await page.goto("/assets");
+  await expect(page).toHaveURL("/");
   await page.goto("/auth/login");
   await expect(page).toHaveURL("/");
   expect(assetFailures).toEqual([]);

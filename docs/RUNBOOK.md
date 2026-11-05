@@ -182,6 +182,25 @@ records. Apply it with `make migrate` before using **Account menu > Settings**.
 No new environment variables, dependencies or development-service restart are
 needed. See [the settings contract](API.md#workspace-settings).
 
+### Asset valuations
+
+Apply `015_assets.sql` with `make migrate` before opening **Assets**. It creates
+the owner-scoped holding/valuation tables and inserts Assets after Summary in
+saved navigation, preserving existing order, profile, theme and financial data.
+It seeds no holdings or spreadsheet amounts. Existing development services can
+remain running; no dependencies, environment variables, workers or price feeds
+are required.
+
+Wallet cash is reconstructed automatically. Use **Add asset** only for values
+not already counted in wallets, choose a group/currency, then record a dated
+nonnegative total valuation. Record debt under Liabilities and zero to close a
+holding without erasing history. Row controls save later or backdated valuations;
+the same date replaces the existing value. Deleting a holding permanently removes
+all its valuations and changes historical reports. These tables belong in the
+same PostgreSQL backup/restore policy as other financial data.
+See [the exact contract](API.md#assets-and-patrimony) for missing-value, cutoff,
+reconstruction and no-conversion semantics.
+
 ### Profile image imports
 
 Under **Account > Profile picture**, select **Custom image (upload)**, choose a

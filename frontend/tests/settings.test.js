@@ -84,7 +84,7 @@ test("settings transport is authenticated, uncached and validates read/write res
       null,
       {},
       { ...settings, theme: "system" },
-      { ...settings, sidebar_order: Array(6).fill("dashboard") },
+      { ...settings, sidebar_order: Array(7).fill("dashboard") },
       {
         ...settings,
         sidebar_order: [

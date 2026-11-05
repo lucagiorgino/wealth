@@ -2,12 +2,13 @@
 
 Wealth is a web application for tracking expenses, income, and personal assets.
 The application provides health/readiness endpoints, external authentication,
-and SSR dashboard, paginated wallets/transactions, annual expense analysis, spending comparisons,
+and SSR dashboard, paginated wallets/transactions, annual expense analysis, spending comparisons, patrimony,
 account profile, and category pages. Users can
 manage their own currency-denominated wallets with computed current balances,
 manage a Wealth display name/icon/custom image, and customize
 private two-level categories with optional predefined groups. Transactions support
-income, expenses, transfers, and recurring series. Asset tracking and currency
+income, expenses, transfers, and recurring series. Assets combine reconstructed wallet cash
+and dated manual asset/liability valuations. Live market prices and currency
 conversion remain planned. Do not present planned behavior as implemented.
 
 ## Architecture
@@ -19,7 +20,7 @@ conversion remain planned. Do not present planned behavior as implemented.
 - **Frontend:** Next.js App Router SSR in JavaScript/JSX with Tailwind and
   registry-generated shadcn/ui components. Read `frontend/AGENTS.md` and relevant
   bundled Next.js guides before changing framework APIs.
-- **Persistence:** PostgreSQL users, wallets, categories, subcategories, and transactions with numbered SQL migrations.
+- **Persistence:** PostgreSQL users, wallets, categories, subcategories, transactions, assets, and asset valuations with numbered SQL migrations.
   Python owns persistence and authorization; the frontend must not query the
   database. `app/db/migrate.py` applies pending files transactionally under an
   advisory lock before the Compose API starts.
@@ -164,6 +165,11 @@ PostgreSQL persistence; database-backed API tests cover persistence and ownershi
   Yearly averages use inclusive year ranges,
   include zero-spend years, and count an included partial current year without
   annualizing it. Refuse future endpoints; round the exact ratio once to 18 places.
+- Assets reconstruct cash from current wallet definitions/initial amounts and the
+  shared due-occurrence projection. Manual nonnegative valuations carry forward;
+  liabilities subtract from net worth. Keep currencies separate and missing/future
+  values distinct from zero. Never sum snapshots across months. Incomplete adjacent
+  months have no change; percentage change from zero is undefined.
 - Add forward-only files under `app/db/migrations/`; never edit an applied
   migration. Include SQL files in package data and keep the Mermaid ER diagram
   aligned with the actual schema. `schema_migrations` is infrastructure state,

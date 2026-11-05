@@ -1,7 +1,8 @@
 # Project blueprint
 
 Wealth is a Python-first personal finance application. The current implementation
-supports personal wallets and categorized transactions, not yet a complete tracker. See the [capability inventory and
+supports personal wallets, categorized transactions, and manually valued assets/liabilities,
+not yet a complete tracker. See the [capability inventory and
 diagrams](docs/IMPLEMENTATION_STATUS.md) for the implemented scope.
 
 ## Component boundaries
@@ -16,7 +17,7 @@ diagrams](docs/IMPLEMENTATION_STATUS.md) for the implemented scope.
   `app/core/`, and PostgreSQL connectivity in `app/db/`.
 - **PostgreSQL** stores users (verified external subjects and local profile
   preferences), their wallets, private categories/subcategories, and transaction
-  definitions (including recurring series).
+  definitions (including recurring series), assets, and dated asset valuations.
   `app/db/wallets.py` owns parameterized, owner-scoped queries.
   `app/schemas/wallets.py` owns closed request schemas and response models.
   `app/db/migrate.py` applies numbered SQL migrations in a transaction under a
@@ -115,6 +116,8 @@ only an explicit wallet save persists an image.
 Migration 012 adds `theme` and a complete `sidebar_order` permutation to users.
 Migration 014 expands the permutation to six features by inserting spending
 comparisons after Summary without reordering existing features or resetting preferences.
+Migration 015 adds Assets after Summary, expanding the permutation to seven while
+preserving existing feature order.
 The settings API derives ownership from the verified subject; successful reads
 of absent rows return light/default order without provisioning. A settings save
 atomically upserts only preference columns, preserving names, images and financial
@@ -131,6 +134,33 @@ revalidate the root layout; refusals preserve form edits and leave the active
 theme/navigation unchanged. Read failures are explicitly announced with default
 shell appearance/navigation and no editable settings form, not fake successful
 preferences. No browser storage or direct frontend database access is added.
+
+## Assets and patrimony
+
+`/assets` shares Summary's year selector, compact aligned chart cards, title-right
+view toggles, exact colored tooltips and grouped horizontal-scroll tables.
+Python reconstructs wallet cash at the prior year-end and each available month-end
+from current initial amounts and due occurrences. The current month stops today UTC.
+Separate owner-scoped manual holdings store dated nonnegative valuations; the last
+known valuation carries forward. Liabilities subtract from net worth.
+This is reconstructed history, not an immutable ledger or a market-data feed.
+Wallet/series edits and backdated valuations intentionally change historical views.
+
+Migration 015 adds `assets` and `asset_valuations`; their composite ownership key
+prevents cross-owner valuations. Creation atomically provisions an absent user,
+holding and first valuation. Reads never provision users. Subsequent valuation
+saves upsert one owned holding/date; confirmed holding deletion removes all its
+valuation history, not wallets or transactions. No metadata editing, automated
+quotes, quantities, screenshots imports or currency conversion is implemented.
+
+Reports retain currencies separately, expose missing coverage and future nulls,
+and compute exact group/portfolio totals without summing balances across months.
+Adjacent-month changes require complete valuations; percentage change from zero
+is undefined. Server-generated dimensionless geometry and monetary-axis metadata
+keep monetary arithmetic out of JavaScript. Wallet/transaction mutations revalidate
+Assets alongside their existing dependent pages. Detailed contracts and synchronized
+diagrams live in [the API reference](docs/API.md#assets-and-patrimony) and
+[implementation status](docs/IMPLEMENTATION_STATUS.md#assets-and-patrimony).
 
 ## Account profiles
 

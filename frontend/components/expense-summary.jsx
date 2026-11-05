@@ -52,10 +52,10 @@ const months = [
 const frozenColumn =
   "sticky left-0 z-10 w-44 min-w-44 max-w-44 whitespace-normal bg-card [overflow-wrap:anywhere] sm:w-56 sm:min-w-56 sm:max-w-56";
 
-export function SummaryYear({ year }) {
+export function SummaryYear({ year, path = "/summary", name = "Summary" }) {
   return (
     <nav
-      aria-label="Summary years"
+      aria-label={`${name} years`}
       className="flex items-center justify-center gap-2"
     >
       <Button
@@ -66,7 +66,7 @@ export function SummaryYear({ year }) {
         aria-label="Previous year"
       >
         {year > 1 ? (
-          <Link href={`/summary?year=${year - 1}`} scroll={false}>
+          <Link href={`${path}?year=${year - 1}`} scroll={false}>
             <ChevronLeft aria-hidden="true" />
           </Link>
         ) : (
@@ -78,7 +78,7 @@ export function SummaryYear({ year }) {
         <PopoverTrigger asChild>
           <Button
             variant="outline"
-            aria-label={`Choose summary year, ${year}`}
+            aria-label={`Choose ${name.toLowerCase()} year, ${year}`}
             className="min-w-20 tabular-nums"
           >
             {year}
@@ -86,14 +86,14 @@ export function SummaryYear({ year }) {
         </PopoverTrigger>
         <PopoverContent className="w-56">
           <form
-            action="/summary"
+            action={path}
             method="get"
-            aria-label="Choose summary year"
+            aria-label={`Choose ${name.toLowerCase()} year`}
             className="space-y-3"
           >
-            <Label htmlFor="summary-year">Year</Label>
+            <Label htmlFor={`${name.toLowerCase()}-year`}>Year</Label>
             <Input
-              id="summary-year"
+              id={`${name.toLowerCase()}-year`}
               name="year"
               type="number"
               min={1}
@@ -116,7 +116,7 @@ export function SummaryYear({ year }) {
         aria-label="Next year"
       >
         {year < 9999 ? (
-          <Link href={`/summary?year=${year + 1}`} scroll={false}>
+          <Link href={`${path}?year=${year + 1}`} scroll={false}>
             <ChevronRight aria-hidden="true" />
           </Link>
         ) : (

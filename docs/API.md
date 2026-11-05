@@ -18,6 +18,10 @@ FastAPI publishes OpenAPI at `/openapi.json` and Swagger UI at `/docs`.
 | `POST /api/v1/wallets/icon-preview`                     | Auth0 bearer access token | 200 normalized private favicon preview, without database access or persistence |
 | `PUT /api/v1/wallets/{id}`                              | Auth0 bearer access token | 200 replaced owned wallet and recomputed balance |
 | `DELETE /api/v1/wallets/{id}`                           | Auth0 bearer access token | 204, deletes an owned wallet only when unreferenced |
+| `GET /api/v1/assets?year=N`                             | Auth0 bearer access token | 200 owned annual patrimony, separated by currency |
+| `POST /api/v1/assets`                                   | Auth0 bearer access token | 201 manual holding and its first dated valuation |
+| `PUT /api/v1/assets/{id}/valuations`                     | Auth0 bearer access token | 204 saved valuation, replacing the same date |
+| `DELETE /api/v1/assets/{id}`                            | Auth0 bearer access token | 204 deletes an owned manual holding and all its valuations |
 | `GET /api/v1/transactions`                              | Auth0 bearer access token | 200 filtered, paginated transaction occurrences and owner-scoped total                      |
 | `GET /api/v1/transactions/options`                      | Auth0 bearer access token | 200 all owned wallet choices and stored appearance |
 | `PATCH /api/v1/transactions/bulk`                       | Auth0 bearer access token | 200 atomic partial update/pinning of 1–100 owned definitions |
@@ -67,18 +71,20 @@ financial records or a local account have been provisioned.
 ```json
 {
   "theme": "light",
-  "sidebar_order": ["dashboard", "wallets", "transactions", "summary", "comparison", "categories"]
+  "sidebar_order": ["dashboard", "wallets", "transactions", "summary", "assets", "comparison", "categories"]
 }
 ```
 
 `PUT /api/v1/settings` requires both fields and returns the saved object.
-`theme` is exactly `light` or `dark`. `sidebar_order` must contain all six
+`theme` is exactly `light` or `dark`. `sidebar_order` must contain all seven
 listed IDs exactly once, in the requested display order. Missing, duplicate,
 unknown or extra fields (including owner/subject IDs) return 422.
 The account menu remains fixed outside the reordered functionality list.
 `comparison` opens the dedicated `/compare-spending` page. Migration 014 inserts
 it immediately after Summary in existing saved orders, preserving the relative
 order of the other features and all other preferences.
+`assets` opens `/assets`. Migration 015 inserts it after Summary in saved orders,
+preserving all existing features' relative order and other preferences.
 
 Ownership comes exclusively from the verified token subject. Reads return the
 above defaults only after a successful database read and do not provision users.
@@ -86,6 +92,85 @@ Writes atomically insert a user if necessary or replace only preference columns,
 preserving profile names/images and financial records. Profile, wallet and category
 writes likewise preserve saved settings. Database failures return 503, never
 default data or a successful save. All responses are private/no-store.
+
+## Assets and patrimony
+
+`GET /api/v1/assets?year=N` accepts years 1–9999 and returns `year`, today's UTC
+`as_of`, and `currencies`. Empty reads do not provision users. Each currency contains:
+
+- `groups`: ordered Cash (`cash`), Stocks / ETF (`stocks`), Crypto (`crypto`),
+  Bonds (`bonds`), Other assets (`other`), and Liabilities (`liabilities`), omitting
+  groups without holdings. Each group has `key`, `label`, `values`, and `holdings`.
+  Holdings expose `id`, `name`, `asset_group`, `currency`, `source` (`wallet` or
+  `asset`), and `values`; wallet IDs are not manual asset IDs.
+- `assets`, `liabilities`, `net_worth`, `change`, and `change_percent`: each has
+  `opening`, twelve January–December `months`, and `latest`. Monetary and percentage
+  values are decimal strings or null. Opening is the previous December 31
+  (null for year 1 or a future opening). Completed months end at month-end;
+  the current month stops today. Future months are null, never forecasts.
+  Latest is the last available checkpoint, not a sum of monthly balances.
+- `missing_values`: thirteen counts (opening, then January–December) of holdings
+  without a known valuation at an available checkpoint. Group and portfolio totals
+  sum recorded values only, with missing coverage exposed rather than fabricated
+  individual zeros. No monthly change is returned unless both adjacent checkpoints
+  are complete. Change is current minus previous net worth; percentage is
+  `change / abs(previous) * 100`, rounded once half-up to 18 decimal places.
+  Percentage change from zero is null.
+- `trend`: twelve `{key, label, amount, value}` entries. Future `amount`/`value`
+  pairs are null; known geometry is signed and normalized by maximum absolute
+  monthly net worth. `allocation` contains latest non-liability group plot points.
+  `net_worth_ticks` and `allocation_ticks` use the Summary monetary-axis contract.
+  These dimensionless coordinates/ticks are generated server-side; consumers must
+  not convert financial strings to floating-point numbers.
+
+All wallet types supply **cash**, reconstructed using their current initial
+amounts and the shared anchored recurrence projection, including signed expenses
+and both transfer directions. This is not an immutable historical ledger: wallet
+edits/deletions and transaction/series edits also change historical reports.
+No wallet balance is persisted. Trading/exchange labels do not imply securities
+or market-price feeds. Manual positions must exclude amounts already represented
+in wallets to avoid double counting.
+
+`POST /api/v1/assets` accepts a closed object:
+
+```json
+{
+  "name": "Example investment",
+  "asset_group": "stocks",
+  "currency": "EUR",
+  "date": "2024-12-31",
+  "amount": "125.1234567890123456789"
+}
+```
+
+Name is trimmed and 1–100 characters. Group is one of the six IDs above.
+Currency defaults to EUR and uses the wallet currency allowlist, normalized to
+uppercase. Amount is a finite **nonnegative exact decimal string or integer**;
+floats and booleans are refused. Liabilities are entered positively and subtracted
+from net worth, never entered as negative assets. Zero is a valid closed/zero-valued
+holding. Date must be valid and no later than today UTC.
+The response contains the created `id`, `name`, `asset_group`, and `currency`.
+Creation provisions the verified-subject user only if absent, atomically with
+the holding and first valuation, preserving profile and settings.
+
+`PUT /api/v1/assets/{id}/valuations` accepts only `date` and `amount` with the same
+rules. It adds a dated snapshot or replaces that date atomically under an owned
+holding lock. A snapshot carries forward until the next dated valuation; before
+the first snapshot it is unknown. A backdated save affects historical months.
+Metadata has no update endpoint in this version. Closing a holding uses a zero
+valuation, preserving earlier values.
+
+`DELETE /api/v1/assets/{id}` deletes the manual holding and its entire valuation
+history, changing historical reports without deleting wallets or transactions.
+Both mutations return 404 for foreign/missing IDs, including wallet IDs.
+Invalid inputs, extra fields and supplied owners return 422; unavailable persistence
+returns explicit 503. All routes require verified identity and are private/no-store.
+A composite foreign key enforces valuation/holding ownership in PostgreSQL.
+There are no automatic quotes, quantities, provider integrations, currency
+conversion, screenshot-data imports, or combined cross-currency net-worth totals.
+
+See the [component and operation diagrams](IMPLEMENTATION_STATUS.md#assets-and-patrimony)
+and [Assets UI](../frontend/README.md#assets-and-patrimony).
 
 ## Account management
 

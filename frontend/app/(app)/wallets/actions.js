@@ -23,6 +23,7 @@ export async function createWalletAction(previousState, formData) {
   }
   revalidatePath("/wallets");
   revalidatePath("/transactions");
+  revalidatePath("/assets");
   return { success: "Wallet created." };
 }
 
@@ -50,6 +51,7 @@ export async function updateWalletAction(previousState, formData) {
   }
   revalidatePath("/wallets");
   revalidatePath("/transactions");
+  revalidatePath("/assets");
   return { success: "Wallet updated." };
 }
 
@@ -65,5 +67,6 @@ export async function deleteWalletAction(previousState, formData) {
   }
   revalidatePath("/wallets");
   revalidatePath("/transactions");
+  revalidatePath("/assets");
   return { success: "Wallet deleted." };
 }

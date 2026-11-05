@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { createServer } from "node:http";
 import {
   summaryTestToken,
+  assetTestToken,
   refreshTestToken,
   transactionTestToken,
   bulkTransactionTestToken,
@@ -14,6 +15,7 @@ import { avatarPng } from "./account-fixtures.js";
 import { validTransaction } from "../lib/transactions.js";
 import { comparisonPayload, SummaryInputError } from "../lib/summary.js";
 import { defaultSidebarOrder, validSettings } from "../lib/settings.js";
+import { assetGroups } from "../lib/assets.js";
 import {
   csvTestToken,
   importCSV,
@@ -47,6 +49,7 @@ const transactionStates = new Map(
     transactionTestToken,
     bulkTransactionTestToken,
     summaryTestToken,
+    assetTestToken,
     refreshTestToken,
     signedExpenseTestToken,
     settingsTestToken,
@@ -100,6 +103,9 @@ let failNextAccountSave = false;
 const settingsByToken = new Map();
 const settingsSaveFailures = new Set();
 const settingsReadFailures = new Set();
+const assetsByOwner = new Map();
+const assetSaveFailures = new Set();
+const assetReadFailures = new Set();
 
 function projectOccurrences(item, asOf) {
   const result = [];
@@ -231,8 +237,11 @@ function moneyAxisTicks(amounts, signed) {
   }));
 }
 
-function withBalance(wallet, transactions) {
-  const balance_as_of = new Date().toISOString().slice(0, 10);
+function withBalance(
+  wallet,
+  transactions,
+  balance_as_of = new Date().toISOString().slice(0, 10),
+) {
   const movements = transactions
     .flatMap((item) => projectOccurrences(item, balance_as_of))
     .filter((item) => item.occurrence_date <= balance_as_of)
@@ -251,6 +260,195 @@ function withBalance(wallet, transactions) {
       ? sumExact([wallet.initial_amount, ...movements])
       : wallet.initial_amount,
     balance_as_of,
+  };
+}
+
+function assetReport(wallets, transactions, assets, year) {
+  const as_of = new Date().toISOString().slice(0, 10);
+  const yearText = String(year).padStart(4, "0");
+  const checkpoints = [
+    year > 1 ? `${String(year - 1).padStart(4, "0")}-12-31` : null,
+    ...Array.from({ length: 12 }, (_, i) => {
+      const month = String(i + 1).padStart(2, "0");
+      const end = new Date(`${yearText}-${month}-01T00:00:00Z`);
+      end.setUTCMonth(end.getUTCMonth() + 1);
+      end.setUTCDate(0);
+      return end.toISOString().slice(0, 10);
+    }),
+  ].map((cutoff, index) =>
+    cutoff === null ||
+    (index === 0 ? cutoff : cutoff.slice(0, 7)) >
+      (index === 0 ? as_of : as_of.slice(0, 7))
+      ? null
+      : cutoff > as_of
+        ? as_of
+        : cutoff,
+  );
+  const latest = Math.max(
+    0,
+    ...checkpoints.flatMap((date, i) => (date ? [i] : [])),
+  );
+  const values = (amounts) => ({
+    opening: amounts[0],
+    months: amounts.slice(1),
+    latest: amounts[latest],
+  });
+  const holdings = [
+    ...wallets.map((wallet) => ({
+      ...wallet,
+      asset_group: "cash",
+      source: "wallet",
+      currency: wallet.currency ?? "EUR",
+      amounts: checkpoints.map((cutoff) =>
+        cutoff
+          ? withBalance(wallet, transactions, cutoff).current_amount
+          : null,
+      ),
+    })),
+    ...assets.map((asset) => ({
+      ...asset,
+      source: "asset",
+      amounts: checkpoints.map((cutoff) =>
+        cutoff
+          ? (asset.valuations
+              .filter((value) => value.date <= cutoff)
+              .sort((a, b) => b.date.localeCompare(a.date))[0]?.amount ?? null)
+          : null,
+      ),
+    })),
+  ];
+  return {
+    year,
+    as_of,
+    currencies: [...new Set(holdings.map((item) => item.currency))]
+      .sort()
+      .map((currency) => {
+        const selected = holdings.filter((item) => item.currency === currency);
+        const totals = (items) =>
+          checkpoints.map((cutoff, i) =>
+            cutoff
+              ? sumExact(
+                  items.flatMap((item) =>
+                    item.amounts[i] === null ? [] : [item.amounts[i]],
+                  ),
+                )
+              : null,
+          );
+        const groups = assetGroups.flatMap((group) => {
+          const members = selected.filter(
+            (item) => item.asset_group === group.value,
+          );
+          return members.length
+            ? [
+                {
+                  key: group.value,
+                  label: group.label,
+                  values: values(totals(members)),
+                  holdings: members.map((item) => ({
+                    ...item,
+                    values: values(item.amounts),
+                  })),
+                },
+              ]
+            : [];
+        });
+        const totalAssets = totals(
+          selected.filter((item) => item.asset_group !== "liabilities"),
+        );
+        const liabilities = totals(
+          selected.filter((item) => item.asset_group === "liabilities"),
+        );
+        const net = totalAssets.map((amount, i) =>
+          amount === null ? null : sumExact([amount, negate(liabilities[i])]),
+        );
+        const missing_values = checkpoints.map((cutoff, i) =>
+          cutoff
+            ? selected.filter((item) => item.amounts[i] === null).length
+            : 0,
+        );
+        const change = net.map((amount, i) =>
+          !i ||
+          amount === null ||
+          net[i - 1] === null ||
+          missing_values[i] ||
+          missing_values[i - 1]
+            ? null
+            : sumExact([amount, negate(net[i - 1])]),
+        );
+        const percent = change.map((amount, i) => {
+          if (amount === null || compareAmounts(net[i - 1], "0") === 0)
+            return null;
+          const base = sumExact([net[i - 1]]).replace(/^-/, "");
+          const scale =
+            (amount.split(".")[1]?.length ?? 0) -
+            (base.split(".")[1]?.length ?? 0);
+          return yearlyAverage(
+            (BigInt(amount.replace(".", "")) * 100n).toString(),
+            BigInt(base.replace(".", "")) * 10n ** BigInt(scale),
+          );
+        });
+        const points = plotPoints(
+          net.slice(1).flatMap((amount, i) =>
+            amount === null
+              ? []
+              : [
+                  {
+                    key: String(i + 1),
+                    label: new Intl.DateTimeFormat("en", {
+                      month: "short",
+                      timeZone: "UTC",
+                    }).format(
+                      new Date(
+                        `2024-${String(i + 1).padStart(2, "0")}-01T00:00:00Z`,
+                      ),
+                    ),
+                    amount,
+                  },
+                ],
+          ),
+        );
+        const allocation = plotPoints(
+          groups
+            .filter(
+              (group) =>
+                group.key !== "liabilities" && group.values.latest !== null,
+            )
+            .map((group) => ({
+              key: group.key,
+              label: group.label,
+              amount: group.values.latest,
+            })),
+        );
+        return {
+          currency,
+          groups,
+          assets: values(totalAssets),
+          liabilities: values(liabilities),
+          net_worth: values(net),
+          change: values(change),
+          change_percent: values(percent),
+          missing_values,
+          trend: Array.from(
+            { length: 12 },
+            (_, i) =>
+              points.find((point) => point.key === String(i + 1)) ?? {
+                key: String(i + 1),
+                label: String(i + 1),
+                amount: null,
+                value: null,
+              },
+          ),
+          allocation,
+          net_worth_ticks: moneyAxisTicks(
+            points.map((point) => point.amount),
+            true,
+          ),
+          allocation_ticks: moneyAxisTicks(
+            allocation.map((point) => point.amount),
+            allocation.some((point) => compareAmounts(point.amount, "0") < 0),
+          ),
+        };
+      }),
   };
 }
 
@@ -430,6 +628,61 @@ const server = createServer(async (request, response) => {
     : isTransactionTest
       ? transactionState.transactions
       : defaultTransactions;
+  const assetOwner = request.headers.authorization;
+  const assets = assetsByOwner.get(assetOwner) ?? [];
+  if (url.pathname === "/_test/asset-save-failure") {
+    assetSaveFailures.add(assetOwner);
+    return send(200, {});
+  }
+  if (url.pathname === "/_test/asset-read-failure") {
+    const { enabled } = await readBody(request);
+    if (enabled) assetReadFailures.add(assetOwner);
+    else assetReadFailures.delete(assetOwner);
+    return send(200, {});
+  }
+  if (url.pathname.startsWith("/api/v1/assets")) {
+    if (request.method === "GET") {
+      if (assetReadFailures.has(assetOwner)) return send(503, {});
+      return send(
+        200,
+        assetReport(
+          wallets,
+          transactions,
+          assets,
+          Number(url.searchParams.get("year")),
+        ),
+      );
+    }
+    if (assetSaveFailures.delete(assetOwner)) return send(503, {});
+    if (request.method === "POST") {
+      const { date, amount, ...data } = await readBody(request);
+      const position = {
+        id: randomUUID(),
+        ...data,
+        valuations: [{ date, amount }],
+      };
+      assets.push(position);
+      assetsByOwner.set(assetOwner, assets);
+      return send(201, position);
+    }
+    const position = assets.find(
+      (item) => item.id === url.pathname.split("/")[4],
+    );
+    if (!position) return send(404, {});
+    if (request.method === "DELETE") {
+      assets.splice(assets.indexOf(position), 1);
+      return send(204);
+    }
+    if (request.method === "PUT") {
+      const data = await readBody(request);
+      const previous = position.valuations.find(
+        (item) => item.date === data.date,
+      );
+      if (previous) Object.assign(previous, data);
+      else position.valuations.push(data);
+      return send(204);
+    }
+  }
   if (url.pathname === "/_test/summary-failure" && isTransactionTest) {
     transactionState.failSummary = true;
     return send(200, { status: "ok" });
