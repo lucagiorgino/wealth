@@ -852,19 +852,69 @@ test("transactions support exact amounts, transfers, recurring series, filtered 
   const slice = euroExpenses.locator(".recharts-pie-sector path").first();
   await expect(slice).toBeVisible();
   const sliceBounds = await slice.boundingBox();
-  await slice.hover({ position: { x: sliceBounds.width / 2, y: 10 } });
-  await expect(
-    euroExpenses.locator("[data-slot=chart-tooltip-indicator]"),
-  ).toBeVisible();
-  await expect(
-    euroExpenses.locator("[data-slot=chart-tooltip-indicator]"),
-  ).toHaveCSS(
-    "background-color",
-    await euroExpenses
-      .locator(".recharts-pie-sector path")
+  await expect(slice).toHaveAttribute("fill", /^url\(#.+\)$/);
+  const gradientIds = await summary
+    .locator("linearGradient")
+    .evaluateAll((nodes) => nodes.map((node) => node.id));
+  expect(new Set(gradientIds).size).toBe(gradientIds.length);
+  const tooltip = euroExpenses.locator(".recharts-tooltip-wrapper");
+  await expect(euroExpenses.locator("svg linearGradient")).toHaveCount(1);
+  for (const dark of [false, true]) {
+    await page.evaluate(
+      (dark) => document.documentElement.classList.toggle("dark", dark),
+      dark,
+    );
+    await slice.hover({ position: { x: sliceBounds.width / 2, y: 10 } });
+    const color = await euroExpenses
+      .locator("linearGradient stop")
       .first()
-      .evaluate((node) => getComputedStyle(node).fill),
-  );
+      .evaluate((node) => getComputedStyle(node).stopColor);
+    const [red, green, blue] = color.match(/\d+/g).map(Number);
+    expect(red).toBeGreaterThan(green);
+    expect(red).toBeGreaterThan(blue);
+    await expect(
+      euroExpenses.locator("[data-slot=chart-tooltip-indicator]"),
+    ).toHaveCSS("background-color", color);
+    // Force an overlap and enable hit testing to verify native paint order.
+    const original = await tooltip.evaluate((node) => {
+      const total = node
+        .closest('[data-slot="chart"]')
+        .parentElement.querySelector('[data-slot="summary-total"]');
+      const target = total.getBoundingClientRect();
+      const parent = node.parentElement.getBoundingClientRect();
+      const original = {
+        transform: node.style.transform,
+        transition: node.style.transition,
+        pointerEvents: node.style.pointerEvents,
+        totalPointerEvents: total.style.pointerEvents,
+      };
+      node.style.transition = "none";
+      node.style.transform = `translate(${target.left - parent.left}px, ${target.top - parent.top}px)`;
+      node.style.pointerEvents = "auto";
+      total.style.pointerEvents = "auto";
+      return original;
+    });
+    expect(
+      await tooltip.evaluate((node) => {
+        const bounds = node.getBoundingClientRect();
+        return node.contains(
+          document.elementFromPoint(bounds.left + 5, bounds.top + 5),
+        );
+      }),
+    ).toBe(true);
+    await tooltip.evaluate((node, original) => {
+      node.style.transform = original.transform;
+      node.style.transition = original.transition;
+      node.style.pointerEvents = original.pointerEvents;
+      node
+        .closest('[data-slot="chart"]')
+        .parentElement.querySelector(
+          '[data-slot="summary-total"]',
+        ).style.pointerEvents = original.totalPointerEvents;
+    }, original);
+    await page.mouse.move(0, 0);
+  }
+  await page.evaluate(() => document.documentElement.classList.remove("dark"));
   await expect(euroExpenses).toContainText("2.50");
   await page.mouse.move(0, 0);
   await euroExpenses

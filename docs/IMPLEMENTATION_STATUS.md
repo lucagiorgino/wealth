@@ -751,7 +751,7 @@ flowchart LR
         TransactionTable["Header type switches; selection, wallet icons, description/categories with type badges, short dates, exact signed amounts and sticky three-dot menus"]
         Workspace -->|"Pinned section then month groups; preserve server order"| TransactionTable
         TransactionTable -->|"Session-checked edits, pins and atomic bulk changes/deletion"| Frontend
-        SummaryUI["Category income/expense donuts with exact center totals; labelled net bars; collapsed wallet expenses"]
+        SummaryUI["Red-gradient expense and green income donuts; exact center totals below tooltips; labelled net bars; collapsed wallet expenses"]
         Workspace --> SummaryUI
         Frontend -->|"Whole-filter exact totals, no unpaginated rows"| SummaryUI
         ImportUI["Shadcn CSV upload, field/format mapping, missing-record and predefined-match recap, and paginated transaction review"]
@@ -1682,6 +1682,7 @@ sequenceDiagram
     UI->>UI: Group pinned entries first, then occurrence months without changing server order
     UI->>UI: Render labelled income/expense/transfer badges with green/red/blue theme pairs
     UI->>UI: Add currency symbols without rounding; omit redundant monthly table headings
+    UI->>UI: Render themed red expense gradients with matching swatches; paint tooltips above donut center text
     UI-->>User: Income/expense donuts with exact center totals, labelled net bars, type switches, tables and page links
     Note over User,UI: Currencies stay separate; negative category totals show explained neutral rings and exact signed data; no transfer summary card
     opt Expand wallet expenses, closed by default

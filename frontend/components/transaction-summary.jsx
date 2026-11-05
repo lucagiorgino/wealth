@@ -1,5 +1,6 @@
 "use client";
 
+import { useId } from "react";
 import { ArrowDownLeft, ArrowUpRight, ChevronDown, Scale } from "lucide-react";
 import {
   Bar,
@@ -55,7 +56,7 @@ function ExactTooltip({ currency }) {
           labelFormatter={(_, payload) => payload[0]?.payload.label}
           formatter={(_, __, point) => (
             <ExactTooltipValue
-              color={point.payload.fill}
+              color={point.payload.color ?? point.payload.fill}
               amount={point.payload.amount}
               currency={currency}
             />
@@ -66,26 +67,51 @@ function ExactTooltip({ currency }) {
   );
 }
 
-function CategoryDonut({ points, amount, currency, label }) {
+function CategoryDonut({ points, amount, currency, label, kind }) {
+  const gradientId = useId().replace(/:/g, "");
+  const expense = kind === "expense";
+  const categoryColor = (index) =>
+    `var(--${expense ? "chart-expense" : "chart"}-${(index % 5) + 1})`;
   const negative = points.some((point) => point.amount.startsWith("-"));
   const available = !negative && points.some((point) => point.value > 0);
   const data = available
     ? points.map((point, index) => ({
         ...point,
-        fill: `var(--chart-${(index % 5) + 1})`,
+        color: categoryColor(index),
+        fill: expense ? `url(#${gradientId}-${index})` : categoryColor(index),
       }))
     : [{ value: 1, fill: "var(--muted)" }];
   return (
     <>
-      <div className="relative">
+      <div className="relative isolate">
         <ChartContainer
           config={{ value: { label } }}
-          className="mx-auto aspect-square h-56 w-full max-w-[260px]"
+          className="relative z-10 mx-auto aspect-square h-56 w-full max-w-[260px]"
         >
           <PieChart
             accessibilityLayer
             aria-label={`${currency ?? ""} ${label} by category`}
           >
+            {available && expense && (
+              <defs>
+                {data.map((point, index) => (
+                  <linearGradient
+                    key={point.key}
+                    id={`${gradientId}-${index}`}
+                    x1="0%"
+                    y1="0%"
+                    x2="100%"
+                    y2="100%"
+                  >
+                    <stop offset="0%" stopColor={point.color} />
+                    <stop
+                      offset="100%"
+                      stopColor={`color-mix(in oklch, ${point.color}, black 15%)`}
+                    />
+                  </linearGradient>
+                ))}
+              </defs>
+            )}
             {available && <ExactTooltip currency={currency} />}
             <Pie
               data={data}
@@ -98,7 +124,7 @@ function CategoryDonut({ points, amount, currency, label }) {
             />
           </PieChart>
         </ChartContainer>
-        <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+        <div className="pointer-events-none absolute inset-0 z-0 flex items-center justify-center">
           <div className="max-w-[52%] space-y-1 text-center">
             <p
               data-slot="summary-total"
@@ -143,7 +169,7 @@ function CategoryDonut({ points, amount, currency, label }) {
                       aria-hidden="true"
                       className="size-2.5 shrink-0 rounded-sm"
                       style={{
-                        backgroundColor: `var(--chart-${(index % 5) + 1})`,
+                        backgroundColor: categoryColor(index),
                       }}
                     />
                     {point.label}
@@ -281,6 +307,7 @@ export function TransactionSummary({ summary }) {
                       amount={total[key]}
                       currency={total.currency}
                       label={label}
+                      kind={key}
                     />
                   )}
                 </div>
@@ -288,7 +315,7 @@ export function TransactionSummary({ summary }) {
             ) : key === "net" ? (
               <p className="text-xl font-semibold tabular-nums">0</p>
             ) : (
-              <CategoryDonut points={[]} amount="0" label={label} />
+              <CategoryDonut points={[]} amount="0" label={label} kind={key} />
             )}
             {key === "net" && (
               <p className="text-xs text-muted-foreground">
