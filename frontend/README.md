@@ -321,8 +321,10 @@ exact totals in their centers, and a labelled Net income bar (income minus
 expenses). The separate Transfers section is removed; transfers and adjustments
 remain available in history but never enter net income. Donut slices use all
 matching main categories, with exact colored tooltips and expandable category
-values. Expense slices use theme-aware red gradients; their tooltip and category
-swatches share the corresponding red tone. Chart tooltips paint above the donut
+values. Expense slices derive theme-aware red gradients from the existing expense
+foreground/background colors, without requiring additional palette tokens in
+cached stylesheets; their tooltip and category swatches share the corresponding
+red tone. Chart tooltips paint above the donut
 center text within a local stacking context. Negative category totals show an
 explained neutral ring and signed values instead of false positive shares.
 Empty/zero charts remain explicit.

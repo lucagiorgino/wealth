@@ -71,7 +71,9 @@ function CategoryDonut({ points, amount, currency, label, kind }) {
   const gradientId = useId().replace(/:/g, "");
   const expense = kind === "expense";
   const categoryColor = (index) =>
-    `var(--${expense ? "chart-expense" : "chart"}-${(index % 5) + 1})`;
+    expense
+      ? `color-mix(in oklch, var(--expense-foreground) ${100 - (index % 5) * 12}%, var(--expense))`
+      : `var(--chart-${(index % 5) + 1})`;
   const negative = points.some((point) => point.amount.startsWith("-"));
   const available = !negative && points.some((point) => point.value > 0);
   const data = available

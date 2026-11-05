@@ -859,17 +859,32 @@ test("transactions support exact amounts, transfers, recurring series, filtered 
   expect(new Set(gradientIds).size).toBe(gradientIds.length);
   const tooltip = euroExpenses.locator(".recharts-tooltip-wrapper");
   await expect(euroExpenses.locator("svg linearGradient")).toHaveCount(1);
+  // Reproduce a cached stylesheet without the newly introduced palette.
+  await page.evaluate(() => {
+    for (let index = 1; index <= 5; index++) {
+      document.documentElement.style.setProperty(
+        `--chart-expense-${index}`,
+        "initial",
+      );
+    }
+  });
   for (const dark of [false, true]) {
     await page.evaluate(
       (dark) => document.documentElement.classList.toggle("dark", dark),
       dark,
     );
     await slice.hover({ position: { x: sliceBounds.width / 2, y: 10 } });
-    const color = await euroExpenses
+    const { color, channels } = await euroExpenses
       .locator("linearGradient stop")
       .first()
-      .evaluate((node) => getComputedStyle(node).stopColor);
-    const [red, green, blue] = color.match(/\d+/g).map(Number);
+      .evaluate((node) => {
+        const color = getComputedStyle(node).stopColor;
+        const context = document.createElement("canvas").getContext("2d");
+        context.fillStyle = color;
+        context.fillRect(0, 0, 1, 1);
+        return { color, channels: [...context.getImageData(0, 0, 1, 1).data] };
+      });
+    const [red, green, blue] = channels;
     expect(red).toBeGreaterThan(green);
     expect(red).toBeGreaterThan(blue);
     await expect(
@@ -914,6 +929,11 @@ test("transactions support exact amounts, transfers, recurring series, filtered 
     }, original);
     await page.mouse.move(0, 0);
   }
+  await page.evaluate(() => {
+    for (let index = 1; index <= 5; index++) {
+      document.documentElement.style.removeProperty(`--chart-expense-${index}`);
+    }
+  });
   await page.evaluate(() => document.documentElement.classList.remove("dark"));
   await expect(euroExpenses).toContainText("2.50");
   await page.mouse.move(0, 0);

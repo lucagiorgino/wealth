@@ -751,7 +751,7 @@ flowchart LR
         TransactionTable["Header type switches; selection, wallet icons, description/categories with type badges, short dates, exact signed amounts and sticky three-dot menus"]
         Workspace -->|"Pinned section then month groups; preserve server order"| TransactionTable
         TransactionTable -->|"Session-checked edits, pins and atomic bulk changes/deletion"| Frontend
-        SummaryUI["Red-gradient expense and green income donuts; exact center totals below tooltips; labelled net bars; collapsed wallet expenses"]
+        SummaryUI["Expense-theme red gradients and green income donuts; exact center totals below tooltips; labelled net bars; collapsed wallet expenses"]
         Workspace --> SummaryUI
         Frontend -->|"Whole-filter exact totals, no unpaginated rows"| SummaryUI
         ImportUI["Shadcn CSV upload, field/format mapping, missing-record and predefined-match recap, and paginated transaction review"]
